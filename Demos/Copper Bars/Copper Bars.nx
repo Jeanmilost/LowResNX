@@ -1,0 +1,93 @@
+'***************************************
+'COPPER BARS
+'AUTHOR JEAN-MILOST REYMOND
+'***************************************
+
+GLOBAL COUNT
+
+COUNT = 8
+
+'BAR DATA, ORGANIZED AS FOLLOW:
+'0 - CURRENT POSITION
+'1 - Y POSITION
+'2 - AMPLITUDE
+'3 - ANGLE
+DIM GLOBAL BARS(COUNT, 3)
+
+'RASTER LINE COLORS
+DIM GLOBAL LINES(128)
+
+'CREATE THE COPPER BARS
+FOR I = 0 TO COUNT - 1
+    BARS(I, 0) = 60
+    BARS(I, 1) = 60
+    BARS(I, 2) = 40
+    BARS(I, 3) = I * 0.3
+NEXT I
+
+ON RASTER CALL DRAWCOPPER
+
+'***************************************
+' MAIN LOOP
+'***************************************
+DO
+    CLS
+
+    'ANIMATE THE BARS
+    FOR I = 0 TO COUNT - 1
+        BARS(I, 0) = BARS(I, 1) + (BARS(I, 2) * COS(BARS(I, 3)))
+
+        ADD BARS(I, 3), 0.05
+
+        IF BARS(I, 3) > PI * 2.0 THEN
+            ADD BARS(I, 3), -(PI * 2.0)
+        END IF
+    NEXT I
+
+    'POPULATE THE LINES TO DRAW IN THE RASTER
+    CALL POPULATECOPPERLINES
+
+    WAIT VBL
+LOOP
+
+'***************************************
+'POPULATE THE COPPER LINES
+'***************************************
+SUB POPULATECOPPERLINES
+    'CLEAR THE PREVIOUS COPPER LINES
+    FOR I = 0 TO 127
+        LINES(I) = 0
+    NEXT I
+
+    'ITERATE THROUGH THE COPPER BARS
+    FOR I = 0 TO COUNT - 1
+        'CALCULATE THE LINE COLOR (MATCHING FROM PALETTES)
+        FOR Y = 0 TO 2
+            INDEX = (I * 4)
+            LINES(BARS(I, 0) + Y)     = INDEX + (3 - Y)
+            LINES(BARS(I, 0) + Y + 3) = INDEX + Y + 1
+        NEXT Y
+    NEXT I
+END SUB
+
+'***************************************
+'RASTER SUBPROGRAM TO DRAW COPPERS
+'***************************************
+SUB DRAWCOPPER
+    'NOTE THE COLORS ARE GET FROM PRE-PROGRAMMED PALETTES, BUT IT WOULD
+    'ALSO BE POSSIBLE TO CALCULATE EACH COLOR ON RUNTIME TO FREE THE
+    'PALETTES USAGE FOR OTHER PURPOSES
+    IF LINES(RASTER) <> 0 THEN
+        PALETTE 0, COLOR(LINES(RASTER) \ 4, LINES(RASTER) MOD 4),,,
+    ELSE
+        PALETTE 0, 0,,,
+    END IF
+END SUB
+
+#1:MAIN PALETTES
+0030201000030201000C0804003F2A15
+00392410000B0602003C281400332211
+
+#2:MAIN CHARACTERS
+00000000000000000000000000000000
+

@@ -1,0 +1,368 @@
+'***************************************
+'STARS 3D BY JEAN-MILOST REYMOND
+'***************************************
+
+GLOBAL GENCH, MAXZ
+
+'GLOBAL VALUES
+GENCH = 128
+MAXZ  = 5.0
+
+'PIXEL BUFFER (USED TO CLEAR LAST DRAWN PIXELS WITHOUT HAVE TO CLEAR THE
+'WHOLE SCREEN)
+DIM GLOBAL PIXELS(64, 2)
+
+'CELLS BUFFER(USED TO KNOW WHICH CELL WAS ATTRIBUTED TO DRAW A PIXEL)
+DIM GLOBAL CELLS(20, 16)
+
+'STAR POSITIONS IN THE 3D WORLD
+DIM GLOBAL STARS(64, 3)
+
+'PROJECTION MATRIX
+DIM GLOBAL PM(4, 4)
+
+'SCREEN RECTANGLE
+DIM GLOBAL SR(4)
+SR(0) = -1.0
+SR(1) = -1.0
+SR(2) =  1.0
+SR(3) =  1.0
+
+RANDOMIZE TIMER
+
+'GENERATE THE RANDOM STARFIELD
+FOR I = 0 TO 63
+    STARS(I, 0) = -10.0 + (RND(2000) / 100.0)
+    STARS(I, 1) = -10.0 + (RND(2000) / 100.0)
+    STARS(I, 2) = -(RND(MAXZ * 100)  / 100.0)
+NEXT I
+
+'***************************************
+'MAIN FUNCTION
+'***************************************
+MAIN:
+    'CALCULATE THE PROJECTION MATRIX TO USE
+    CALL MAT4PERSPECTIVE(45.0, 160 / 128, 1.0, 10.0, PM())
+
+    DIM IN(3)
+    DIM OUT(3)
+
+    DO
+        CALL STARTSCENE
+
+        'ITERATE THROUGH STARS
+        FOR I = 0 TO 63
+            'GET THE STAR VECTOR
+            IN(0) = STARS(I, 0)
+            IN(1) = STARS(I, 1)
+            IN(2) = STARS(I, 2)
+
+            'RASTERIZE THE VERTEX (I.E CONVERT IT TO A 2D POINT)
+            CALL RASTERIZEVERTEX(IN(), PM(), SR(), 0.1, 160, 128, OUT())
+
+            'GET THE PIXEL COORDINATE
+            PX = OUT(0)
+            PY = OUT(1)
+
+            'IS PIXEL OUT OF SCREEN?
+            IF PX >= 0 AND PX < 160 AND PY >= 0 AND PY < 128 THEN
+                COL = 3
+
+                'CALCULATE THE STAR COLOR (LONGER TO THE CAMERA, LESS
+                'BRIGHTER)
+                IF STARS(I, 2) < -4.9 THEN
+                    COL = 2
+                ELSE IF STARS(I, 2) < -4.2 THEN
+                    COL = 1
+                ELSE IF STARS(I, 2) < -3.5 THEN
+                    COL = 0
+                END IF
+            
+                'DRAW THE PIXEL
+                CALL PIXEL(PX, PY, COL)
+
+                'KEEP THE CURRENT PIXEL POSITION IN ORDER TO BE ABLE TO
+                'CLEAN IT LATER
+                PIXELS(I, 0) = PX
+                PIXELS(I, 1) = PY
+
+                'MOVE THE STAR CLOSER TO THE CAMERA
+                STARS(I, 2) = STARS(I, 2) + 0.1
+
+                'IF THE STAR GONE OUT OF VISIBLE AREA, RESET IT
+                IF STARS(I, 2) >= -0.1 THEN
+                    STARS(I, 2) = -MAXZ
+                END IF
+            ELSE
+                'STAR GONE OUT OF SCREEN, RESET IT
+                STARS(I, 2) = -MAXZ
+            END IF
+        NEXT I
+
+        CALL ENDSCENE
+
+        WAIT VBL
+    LOOP
+
+'***************************************
+'START TO DRAW THE SCENE
+'***************************************
+SUB STARTSCENE
+    CLS
+
+    'CLEAR ALL THE PREVIOUSLY DRAWN PIXELS BY DRAWING THEM AGAIN IN
+    'BLACK
+    FOR I = 0 TO 63
+        CALL PIXEL(PIXELS(I, 0), PIXELS(I, 1), 3)
+    NEXT I
+
+    'CLEAR THE CELL BUFFER
+    FOR J = 0 TO 15
+        FOR I = 0 TO 19
+            CELLS(I, J) = 0
+        NEXT I
+    NEXT J
+
+    'RESET THE CHAR GENERATOR NUMBER
+    GENCH = 128
+END SUB
+
+'***************************************
+'FINALIZE THE SCENE DRAWING
+'***************************************
+SUB ENDSCENE
+    'SHOW ALL THE PAINTED CELLS
+    FOR J = 0 TO 15
+        FOR I = 0 TO 19
+            CELL I, J, CELLS(I, J)
+        NEXT I
+    NEXT J
+END SUB
+
+'***************************************
+'RASTERIZE A VERTEX TO A 2D POINT
+'IN - INPUT VERTEX TO RASTERIZE
+'M - PROJECTION MATRIX TO APPLY
+'SCRRECT - SCREEN RECTANGLE (MIN AND MAX POINTS)
+'ZNEAR - NEAR CLIPPING PLANE
+'IMGW - FRAME BUFFER (DEST IMAGE) WIDTH
+'IMGH - FRAME BUFFER (DEST IMAGE) HEIGHT
+'OUT - OUTPUT 2D POINT (THE Z COORINATE IS KEPT)
+'***************************************
+SUB RASTERIZEVERTEX(IN(), M(), SCRRECT(), ZNEAR, IMGW, IMGH, OUT())
+    DIM VERTEXCAMERA(3)
+
+    'TRANSFORM THE INPUT VERTEX INTO THE CAMERA SPACE
+    CALL MAT4TRANSFORM(M(), IN(), VERTEXCAMERA())
+
+    DIM VERTEXSCREEN(2)
+
+    'TRANSFORM THE CAMERA VERTEX TO A POINT IN THE SCREEN SPACE
+    VERTEXSCREEN(0) = (ZNEAR * VERTEXCAMERA(0)) / -VERTEXCAMERA(2)
+    VERTEXSCREEN(1) = (ZNEAR * VERTEXCAMERA(1)) / -VERTEXCAMERA(2)
+
+    SUBRL = SCRRECT(2) - SCRRECT(0)
+    ADDRL = SCRRECT(2) + SCRRECT(0)
+    SUBTB = SCRRECT(1) - SCRRECT(3)
+    ADDTB = SCRRECT(1) + SCRRECT(3)
+
+    DIM VERTEXNDC(2)
+
+    'CONVERT POINT FROM SCREEN SPACE TO NORMALIZED DEVICE COORDINATES
+    '(NDC) SPACE (IN RANGE [-1, 1])
+    VERTEXNDC(0) = ((2.0 * VERTEXSCREEN(0)) / SUBRL) - (ADDRL / SUBRL)
+    VERTEXNDC(1) = ((2.0 * VERTEXSCREEN(1)) / SUBTB) - (ADDTB / SUBTB)
+
+    'CONVERT TO RASTER SPACE. NOTE IN RASTER SPACE Y IS DOWN, SO THE
+    'DIRECTION IS INVERTED
+    OUT(0) = (VERTEXNDC(0) + 1.0) / 2.0 * IMGW
+    OUT(1) = (1.0 - VERTEXNDC(1)) / 2.0 * IMGH
+    OUT(2) = -VERTEXCAMERA(2)
+END SUB
+
+'***************************************
+'CREATE A FRUSTRUM MATRIX (AS OPENGL DOES)
+'L - VIEWPORT LEFT COORDINATE
+'T - VIEWPORT TOP COORDINATE
+'R - VIEWPORT RIGHT COORDINATE
+'B - VIEWPORT BOTTOM COORDINATE
+'ZNEAR - NEAR CLIPPING PLANE
+'ZFAR - FAR CLIPPING PLANE
+'M - RESULTING FRUSTRUM MATRIX
+'***************************************
+SUB MAT4FRUSTUM(L, T, R, B, ZNEAR, ZFAR, M())
+    'OPENGL SPECIFICATIONS
+    '|  2N/(R-L)     0             0             0         |
+    '|  0            2N/(T-B)      0             0         |
+    '|  (R+L)/(R-L)  (T+B)/(T-B)  -(F+N)/(F-N)  -2FN/(F-N) |
+    '|  0            0            -1             0         |
+    '
+    'CAN BE REWRITTEN AS
+    '|  2N/(R-L)     0             0            0         |
+    '|  0            2N/(T-B)      0            0         |
+    '|  (R+L)/(R-L)  (T+B)/(T-B)   (F+N)/(N-F)  2FN/(N-F) |
+    '|  0            0            -1            0         |
+    '
+    'INVALID FOR N <= 0, F <= 0, L = R, B = T, OR N = F
+
+    'CALCULATE MATRIX COMPONENT VALUES
+    X2N  = 2.0   * ZNEAR
+    X2NF = X2N   * ZFAR
+    PFN  = ZFAR  + ZNEAR
+    MNF  = ZNEAR - ZFAR
+    PRL  = R + L
+    MRL  = R - L
+    PTB  = T + B
+    MTB  = T - B
+
+    'BUILD MATRIX
+    M(0, 0) =  X2N / MRL
+    M(1, 0) =  0.0
+    M(2, 0) =  0.0
+    M(3, 0) =  0.0
+    M(0, 1) =  0.0
+    M(1, 1) =  X2N / MTB
+    M(2, 1) =  0.0
+    M(3, 1) =  0.0
+    M(0, 2) =  PRL  / MRL
+    M(1, 2) =  PTB  / MTB
+    M(2, 2) =  PFN  / MNF
+    M(3, 2) =  X2NF / MNF
+    M(0, 3) =  0.0
+    M(1, 3) =  0.0
+    M(2, 3) = -1.0
+    M(3, 3) =  0.0
+END SUB
+
+'***************************************
+'CREATE A PERSPECTIVE MATRIX
+'FOVYDEG - FIELD OF VIEW IN DEGREES
+'ASPECT - ASPECT RATIO (NORMALLY W / H)
+'ZNEAR - NEAR CLIPPING PLANE
+'ZFAR - FAR CLIPPING PLANE
+'M - RESULTING PROJECTION MATRIX
+'***************************************
+SUB MAT4PERSPECTIVE(FOVYDEG, ASPECT, ZNEAR, ZFAR, M())
+    MAXY    =  ZNEAR * TAN(FOVYDEG * PI / 360.0)
+    MAXX    =  MAXY  * ASPECT
+    NEGMAXY = -MAXY
+    NEGMAXX = -MAXX
+
+    CALL MAT4FRUSTUM(NEGMAXX, NEGMAXY, MAXX, MAXY, ZNEAR, ZFAR, M())
+END SUB
+
+'***************************************
+'APPLY A MATRIX TRANSFORMATION TO A VECTOR
+'M - MATRIX TO APPLY
+'V - VECTOR TO TRANSFORM
+'R - RESULTING TRANSFORMED VECTOR
+'***************************************
+SUB MAT4APPLYTOVECTOR(M(), V(), R())
+    R(0) = (V(0) * M(0, 0) + V(1) * M(1, 0) + V(2) * M(2, 0) + M(3, 0))
+    R(1) = (V(0) * M(0, 1) + V(1) * M(1, 1) + V(2) * M(2, 1) + M(3, 1))
+    R(2) = (V(0) * M(0, 2) + V(1) * M(1, 2) + V(2) * M(2, 2) + M(3, 2))
+END SUB
+
+'***************************************
+'TRANSFORM A VECTOR BY A MATRIX
+'M - MATRIX TO APPLY
+'V - VECTOR TO TRANSFORM
+'R - RESULTING TRANSFORMED VECTOR
+'***************************************
+SUB MAT4TRANSFORM(M(), V(), R())
+    'APPLY TRANSFORMATIONS (POSITION, ROTATION, SCALING, ...) TO VECTOR
+    CALL MAT4APPLYTOVECTOR(M(), V(), R())
+
+    'CALCULATE THE AMPLITUDE
+    W = (V(0) * M(0, 3) + V(1) * M(1, 3) + V(2) * M(2, 3) + M(3, 3))
+
+    'SHOULD NOT HAPPEN, UNLESS THE MATRIX IS WRONG
+    IF W = 0.0 THEN
+        EXIT SUB
+    END IF
+
+    'CALCULATE THE FINAL VECTOR
+    R(0) = R(0) / W
+    R(1) = R(1) / W
+    R(2) = R(2) / W
+END SUB
+
+'***************************************
+'DRAW A PIXEL IN MEMORY
+'X - THE PIXEL X COORDINATE FROM CHAR LEFT
+'Y - THE PIXEL Y COORDINATE FROM CHAR TOP
+'COL - THE COLOR TO USE FROM THE PALETTE
+'***************************************
+SUB PIXEL(X, Y, COL)
+    W    = 160
+    H    = 128
+    XCH  = X \ 8
+    YCH  = Y \ 8
+    XMOD = X MOD 8
+    YMOD = Y MOD 8
+
+    'IS PIXEL TO DRAW OUT OF BOUNDS?
+    IF XCH < 0 OR XCH > 19 OR YCH < 0 OR YCH > 15 THEN
+        EXIT SUB
+    END IF
+
+    'GET THE CURRENT CHAR FOR THIS CELL FROM BUFFER
+    CH = CELLS(XCH, YCH)
+
+    'NO ATTRIBUTED CELL?
+    IF CH = 0 THEN
+        'SET A CELL IN THE BUFFER
+        CH              = GENCH
+        CELLS(XCH, YCH) = CH
+        INC GENCH
+    END IF
+
+    'DRAW A PIXEL ONTO THE CHARACTER
+    CALL SETPIXEL(XMOD, YMOD, COL, CH)
+END SUB
+
+'***************************************
+'DRAW A PIXEL ONTO A CHARACTER IN MEMORY
+'X - THE PIXEL X COORDINATE FROM CHAR LEFT
+'Y - THE PIXEL Y COORDINATE FROM CHAR TOP
+'COL - THE COLOR TO USE FROM THE PALETTE
+'CH - THE TARGET CHARACTER
+'***************************************
+SUB SETPIXEL(X, Y, COL, CH)
+    'CALCULATE THE BASE ADDRESS AND LIMIT THE X AND Y POS TO 8 PIXELS
+    BASE = $8000 + ($10 * CH)
+    PX   = X MOD 8
+    PY   = Y MOD 8
+
+    'CALCULATE THE PIXEL X POSITION
+    POKE $A000, 128
+    ROR $A000, PX
+    P = PEEK($A000)
+
+    'GET THE FIRST COLOR LAYER
+    LAYER = PEEK(BASE + PY) AND NOT P
+
+    'APPLY THE PIXEL MASK
+    IF COL = 0 OR COL = 2 THEN
+        LAYER = LAYER OR P
+    END IF
+
+    'APPLY BACK THE FIRST LAYER
+    POKE BASE + PY, LAYER
+
+    'GET THE SECOND COLOR LAYER
+    LAYER = PEEK(BASE + PY + 8) AND NOT P
+
+    'APPLY THE PIXEL MASK
+    IF COL = 1 OR COL = 2 THEN
+        LAYER = LAYER OR P
+    END IF
+
+    'APPLY BACK THE SECOND LAYER
+    POKE BASE + PY + 8, LAYER
+END SUB
+
+#1:MAIN PALETTES
+003F2A1500383400003C0C00003F3C00
+003F2A15003F2A15003F2A15003F2A15
+

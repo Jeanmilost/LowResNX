@@ -1,0 +1,3245 @@
+'***************************************
+'TRAPPED!
+'BY JEAN-MILOST REYMOND
+'SPECIAL THANK TO WAS8BIT FOR HIS HELP
+'***************************************
+
+GLOBAL ITEMCOUNT, RADIUS, USEDIAGS, PLAYERDIR, PLAYERVELOCITY, PLAYERLIFE, LIFEFRAME, LX, LY, LASERROOM, TOXICROOM, ROOMCHANGING, LASTHITITEM, DOEXITTRIGGER, LASTDOOR, NEXTPOSX, NEXTPOSY, NEXTDIR, FIREBALLPOS, FIREBALLDELAY, FADERVALUE, FADEROFFSET, TITLECOLOFFSET, EFFECTSTART, EFFECTLENGTH, TOXICEFFECTSTART, LASEREFFECTTIME, QUICKTEXT, SHOWLOOPMSG, CHEAT, LNG$, YES$, NO$, MSGX, INFOMSG$
+
+'ISOMETRIC COORDINATE SYSTEM AXIS:
+' Z   Y
+' |  /
+' | /\/
+' |/\/\/
+'  \/\/\
+'   \/\
+'    \
+'     X
+DIM GLOBAL ORIGIN(2)
+
+'SPRITES ARE ORGANIZED AS FOLLOW:
+'0 TO 3   - USED FOR USER INTERFACE
+'4 TO 17  - USED FOR FRONT DOORS
+'SINCE 18 - SCENE ITEMS
+
+'BOUNDING BOX COLLECTION, IN RELATIVE COORDINATES, ORGANIZED AS FOLLOW:
+'0 - 1X2 CELLS BOUNDING BOX, I.E 8X8X16 PIXELS ON XYZ AXIS
+'1 - 1X2 CELLS POSITIVE X SHIFTED FOR LEFT OBJECTS LEFT SIDE
+'2 - 1X2 CELLS NEGATIVE X SHIFTED FOR LEFT OBJECTS RIGHT SIDE
+'3 - 1X2 CELLS POSITIVE Y SHIFTED FOR RIGHT OBJECTS LEFT SIDE
+'4 - 1X2 CELLS NEGATIVE Y SHIFTED FOR RIGHT OBJECTS RIGHT SIDE
+'ITEMS ARE ORGANIZED AS FOLLOW:
+'0 - MIN EDGE, X POSITION
+'1 - MIN EDGE, Y POSITION
+'2 - MIN EDGE, Z POSITION
+'3 - MAX EDGE, X POSITION
+'4 - MAX EDGE, Y POSITION
+'5 - MAX EDGE, Z POSITION
+DIM GLOBAL BBOX(5, 6)
+
+'SPRITE COLLECTION, ITEMS ARE:
+'0  - PLAYER LEFT DIR, FRAME 1
+'1  - PLAYER LEFT DIR, FRAME 2
+'2  - PLAYER BOTTOM DIR, FRAME 1
+'3  - PLAYER BOTTOM DIR, FRAME 2
+'4  - ROBOT LEFT DIR, FRAME 1
+'5  - ROBOT LEFT DIR, FRAME 2
+'6  - ROBOT BOTTOM DIR, FRAME 1
+'7  - ROBOT BOTTOM DIR, FRAME 2
+'8  - GREEN PLANT
+'9  - LEFT CABINET, LEFT PART
+'10 - LEFT CABINET, RIGHT PART
+'11 - RIGHT CABINET, LEFT PART
+'12 - RIGHT CABINET, RIGHT PART
+'13 - LEFT DESK, LEFT PART
+'14 - LEFT DESK, RIGHT PART
+'15 - RIGHT DESK, LEFT PART
+'16 - RIGHT DESK, RIGHT PART
+'17 - LEFT TERMINAL
+'18 - RIGHT TERMINAL
+'19 - LEFT COMPUTER DESK, LEFT PART
+'20 - LEFT COMPUTER DESK, RIGHT PART
+'21 - RIGHT COMPUTER DESK, LEFT PART
+'22 - RIGHT COMPUTER DESK, RIGHT PART
+'23 - LEFT DRAWER DESK, LEFT PART
+'24 - LEFT DRAWER DESK, RIGHT PART
+'25 - RIGHT DRAWER DESK, LEFT PART
+'26 - RIGHT DRAWER DESK, RIGHT PART
+'27 - LEFT SERVER, LEFT PART
+'28 - LEFT SERVER, RIGHT PART
+'29 - RIGHT SERVER, LEFT PART
+'30 - RIGHT SERVER, RIGHT PART
+'31 - LEFT TRANSLUCENT FENCE
+'32 - RIGHT TRANSLUCENT FENCE
+'33 - PURPLE CRYSTAL, LEVEL 1
+'34 - BLUE CRYSTAL, LEVEL 2
+'35 - PURPLE TRANSLUCENT CRYSTAL
+'36 - BLUE TRANSLUCENT CRYSTAL
+'37 - HEART, FRAME 1
+'38 - HEART, FRAME 2
+'39 - BLUE PENDRIVE
+'40 - RED CARD
+'41 - GREEN CARD
+'42 - BLUE CARD
+'43 - BROWN PENDRIVE
+'44 - GREEN PENDRIVE
+'45 - GRAY PENDRIVE
+'46 - FIREBALL, FRAME 1
+'47 - FIREBALL, FRAME 2
+'48 - PURPLE CRYSTAL, LEVEL 3
+'49 - BLUE CRYSTAL, LEVEL 4
+'50 - GAS MASK
+'51 - CLOCK
+'EACH SPRITE ITEM IS ORGANIZED AS FOLLOW:
+'0 - TOP CHAR INDEX
+'1 - MASK CHAR INDEX
+'2 - BOTTOM CHAR INDEX
+'3 - TOP CHAR PALETTE INDEX
+'4 - MASK CHAR PALETTE INDEX
+'5 - BOTTOM CHAR PALETTE INDEX
+'6 - Y DELTA BETWEEN TOP AND BOTTOM CHARS
+'7 - BOUNDING BOX ITEM (IN BOUNDING BOX COLLECTION)
+DIM GLOBAL COLLECTION(52, 8)
+
+'PLAYER CHARACTER DATA, INDEX ARE:
+'0 - X POSITION
+'1 - Y POSITION
+'2 - Z POSITION
+'3 - WALKING ANIMATION FRAME
+DIM GLOBAL CHARDATA(4)
+
+'DOORS, ORGANIZED AS FOLLOW:
+'0 - TOP DOOR
+'1 - RIGHT DOOR
+'2 - BOTTOM DOOR
+'3 - LEFT DOOR
+'EACH DOOR CONTAINS ASSOCIATED DATA, WHICH ARE DEFINED AS FOLLOW:
+'0 - IF 1, DOOR IS VISIBLE, OTHERWISE HIDDEN
+'1 - MIN TRIGGER ZONE EDGE, X POSITION
+'2 - MIN TRIGGER ZONE EDGE, Y POSITION
+'3 - MIN TRIGGER ZONE EDGE, Z POSITION
+'4 - MAX TRIGGER ZONE EDGE, X POSITION
+'5 - MAX TRIGGER ZONE EDGE, Y POSITION
+'6 - MAX TRIGGER ZONE EDGE, Z POSITION
+'7 - DOOR LOCK TYPE, WHICH MAY BE:
+'    0 = NOT LOCKED
+'    1 = LOCKED WITH A RED CARD
+'    2 = LOCKED WITH A GREEN CARD
+'    3 = LOCKED WITH A BLUE CARD
+DIM GLOBAL DOORS(4, 8)
+
+'OBJECTS DISPATCHED IN THE SCENES, ORGANIZED AS FOLLOW:
+'0 - ALIAS INDEX. ALIAS IS CALCULATED AS FOLLOW: ALIAS INDEX + 100
+'ITEMS ARE ORGANIZED AS FOLLOW:
+'0 - OBJECT TYPE, WHICH MAY BE:
+'    0 = EMPTY
+'    1 = RED CARD
+'    2 = GREEN CARD
+'    3 = BLUE CARD
+'    4 = BLUE PENDRIVE
+'    5 = BROWN PENDRIVE
+'    6 = GREEN PENDRIVE
+'    7 = GRAY PENDRIVE
+'    8 = GAS MASK
+'    9 = CLOCK
+'1 - IF 1, THE OBJECT IS IN THE WALLET
+DIM GLOBAL OBJECTS(9, 2)
+
+'FIREBALL DATA, WHICH ARE:
+'0 - PERCENT TO TARGET ON X AXIS
+'1 - PERCENT TO TARGET ON Y AXIS
+'2 - PERCENT TO TARGET ON Z AXIS
+DIM GLOBAL FIREBALL(3)
+
+'CRYSTALS STATES, 0 = DISABLED, 1 = ACTIVE
+DIM GLOBAL CRYSTALSTATE(4)
+
+'SCENE ITEMS, MAX 15 PER SCENE
+'INDEX ARE:
+'0 - X POSITION
+'1 - Y POSITION
+'2 - Z POSITION
+'3 - SPRITE INDEX IN THE COLLECTION
+'4 - IF 1, SPRITE SHOULD BE MIRRORED
+'5 - IF 1, THE ITEM IS VISIBLE IN THE SCREEN
+'6 - CHAR ANIMATION FRAME (OPTIONAL)
+'7 - COLOR ANIMATION FRAME (OPTIONAL)
+'8 - LAST KNOWN DIR (OPTIONAL)
+'9 - LINKED OBJECT INDEX (OPTIONAL, -1 IF NO LINKED OBJECT)
+DIM GLOBAL SCENEITEMS(15, 10)
+
+'PLAYER WALLET CONTENT, EACH ITEM MAY BE ONE OF THE FOLLOWING VALUE:
+'0 = EMPTY
+'1 = RED CARD
+'2 = GREEN CARD
+'3 = BLUE CARD
+'4 = BLUE PENDRIVE
+'5 = BROWN PENDRIVE
+'6 = GREEN PENDRIVE
+'7 = GRAY PENDRIVE
+'8 = GAS MASK
+'9 = CLOCK
+DIM GLOBAL WALLET(4)
+
+'PALETTES ARRAY FOR BLENDING
+DIM GLOBAL PALETTES(8, 4)
+
+'GLOBAL VALUES INIT
+ITEMCOUNT      = 15
+PLAYERVELOCITY = 0.75
+LIFEFRAME      = 0
+FADEROFFSET    = 0.05
+EFFECTSTART    = 0
+EFFECTLENGTH   = 8
+QUICKTEXT      = 0
+LNG$           = "EN"
+YES$           = "YES"
+NO$            = "NO "
+    
+GAMEPAD 1
+
+'WHETHER OR NOT DIAGONAL CONTROLS ARE USED
+USEDIAGS = 0
+
+'SET THE SCENE ORIGIN AND RADIUS FROM ORIGIN TO LIMITS ON EACH AXIS
+ORIGIN(0) = 25.25
+ORIGIN(1) = 105.25
+RADIUS    = 30.5
+
+'LOAD THE BOUNDING BOX COLLECTION
+CALL LOADBBOX
+
+'LOAD THE SPRITE COLLECTION
+CALL LOADSPRITES
+
+'LOAD THE DOOR DATA
+CALL LOADDOORS
+
+'SAVE THE PALETTES STATE
+CALL SAVEPALETTES
+
+'***************************************
+'MAIN LOOP
+'***************************************
+MAIN:
+    DO
+        CALL SHOWMENU
+        CALL RESETGAME
+        CALL GAMELOOP
+    LOOP
+
+'***************************************
+'SHOW THE MAIN MENU
+'***************************************
+SUB SHOWMENU
+    'CLEAR SCREEN AND HIDE SPRITES
+    CLS
+    SPRITE OFF
+
+    'RESTORE THE ROBOT PALETTE TO ITS INITIAL STATE
+    PALETTE 4, , PALETTES(4, 1), PALETTES(4, 2), PALETTES(4, 3)
+
+    'RESTORE OTHER PALETTES TO DEFAULT
+    PALETTES(3, 1) = 63
+    PALETTES(3, 2) = 42
+    PALETTES(3, 3) = 21
+    PALETTE 3, , PALETTES(3, 1), PALETTES(3, 2), PALETTES(3, 3)
+    PALETTES(5, 1) = 57
+    PALETTES(5, 2) = 36
+    PALETTES(5, 3) = 16
+    PALETTE 5, , PALETTES(5, 1), PALETTES(5, 2), PALETTES(5, 3)
+
+    'INITIALIZE VALUES
+    TITLECOLOFFSET = 0
+    CHEAT          = 0
+
+    'SET BACKGROUND TO PAINT TO AND SELECT PALETTE
+    BG 0
+    PAL 2
+
+    'DRAW THE TITLE
+    FOR J = 0 TO 1
+        FOR I = 0 TO 6
+            CELL 6 + I, 2 + J, 178 + (7 * J) + I
+        NEXT I
+    NEXT J
+
+    BG 1
+
+    CALL DRAWMENUTEXT
+
+    CURSORPOS = 9
+
+    'PLAY THE MUSIC, START FROM THE 2ND PATTERN IF END SCREEN WAS SHOWN
+    IF LY = 5 THEN
+        MUSIC(2)
+    ELSE
+        MUSIC(0)
+    END IF
+
+    ON RASTER CALL WOBBLERFUNC
+
+    REPEAT
+        'MOVE THE GLITCH EFFECT
+        ADD EFFECTSTART, 0.3
+
+        'GLICH OFFSET LIMIT REACHED?
+        IF EFFECTSTART > 60 THEN
+            'RESTART IT
+            EFFECTSTART = 0
+        END IF
+
+        'CALCULATE BLENDING VALUE TO ANIMATE THE TITLE COLOR
+        VALUE = SIN(TITLECOLOFFSET / 100)
+
+        'IS VALUE OUT OF BOUNDS?
+        IF VALUE <= 0.0 THEN
+            VALUE = 0.0
+        END IF
+
+        C1 = 0
+        C2 = 0
+
+        'BLEND THE PALETTE COLORS
+        CALL BLENDCOLORS(PALETTES(2, 2), 63, VALUE, C1)
+        CALL BLENDCOLORS(PALETTES(2, 3), 63, VALUE, C2)
+
+        'APPLY THE NEWLY BLENDED PALETTE
+        PALETTE 2, , , C1, C2
+
+        'CALCULATE NEXT COLOR FRAME
+        ADD TITLECOLOFFSET, 2
+
+        'OUT OF BOUNDS?
+        IF (TITLECOLOFFSET >= 628) THEN
+            TITLECOLOFFSET = 0
+        END IF
+
+        'DO MOVE THE OPTION CURSOR UP OR DOWN?
+        IF UP TAP(0) AND CURSORPOS > 9 THEN
+            DEC CURSORPOS
+        ELSE IF DOWN TAP(0) AND CURSORPOS < 11 THEN
+            INC CURSORPOS
+        END IF
+
+        PAL 3
+
+        'DRAW THE OPTION CURSOR
+        FOR I = 0 TO 2
+            IF I + 9 = CURSORPOS THEN
+                CELL 0, I + 9, 121
+            ELSE
+                TEXT 0, I + 9, " "
+            END IF
+        NEXT I
+
+        'DO CHANGE OPTION?
+        IF BUTTON TAP(0, 1) THEN
+            PAL 6
+
+            'IS USE DIAGONALS OPTION HIGHLIGHTED?
+            IF CURSORPOS = 9 THEN
+                'SWITCH USE DIAGONALS OPTION
+                IF USEDIAGS = 1 THEN
+                    TEXT 14, 9, NO$
+                    USEDIAGS = 0
+                ELSE
+                    TEXT 14, 9, YES$
+                    USEDIAGS = 1
+                END IF
+            END IF
+
+            'IS QUICK TEXT OPTION SELECTED?
+            IF CURSORPOS = 10 THEN
+                'SWITCH QUICK TEXT OPTION
+                IF QUICKTEXT = 1 THEN
+                    TEXT 14, 10, NO$
+                    QUICKTEXT = 0
+                ELSE
+                    TEXT 14, 10, YES$
+                    QUICKTEXT = 1
+                END IF
+            END IF
+
+            'IS LANGUAGE OPTION SELECTED?
+            IF CURSORPOS = 11 THEN
+                'SWITCH LANGUAGE
+                IF LNG$ = "EN" THEN
+                    LNG$ = "FR"
+                    YES$ = "OUI"
+                    NO$  = "NON"
+                ELSE IF LNG$ = "FR" THEN
+                    LNG$ = "PT"
+                    YES$ = "SIM"
+                    NO$  = "NAO"
+                ELSE IF LNG$ = "PT" THEN
+                    LNG$ = "EN"
+                    YES$ = "YES"
+                    NO$  = "NO "
+                END IF
+
+                CALL DRAWMENUTEXT
+            END IF
+        END IF
+
+        'CHEAT CODE IS LEFT RIGHT LEFT LEFT RIGHT
+        IF LEFT TAP(0) THEN
+            IF (CHEAT = 0 OR CHEAT = 2 OR CHEAT = 3) THEN
+                INC CHEAT
+            ELSE IF CHEAT < 5 THEN
+                CHEAT = 0
+            END IF
+        ELSE IF RIGHT TAP(0) THEN
+            IF (CHEAT = 1 OR CHEAT = 4 OR CHEAT = 6) THEN
+                INC CHEAT
+            ELSE IF CHEAT < 5 THEN
+                CHEAT = 0
+            END IF
+        END IF
+
+        'BLINK TO RED IF CHEAT CODE WAS ENABLED
+        IF CHEAT = 5 THEN
+            PALETTE 0, 48, , ,
+            INC CHEAT
+        ELSE IF CHEAT = 7 THEN
+            PALETTE 0, 12, , ,
+            INC CHEAT
+        ELSE
+            PALETTE 0, 0, , ,
+        END IF
+
+        WAIT VBL
+    UNTIL BUTTON(0, 0)
+
+    'RESTORE THE PREVIOUS PALETTE
+    PALETTE 2, , , PALETTES(2, 2), PALETTES(2, 3)
+
+    'STOP THE MUSIC
+    STOP
+END SUB
+
+'***************************************
+'GAME LOOP
+'***************************************
+SUB GAMELOOP
+    IF LNG$ = "EN" THEN
+        CALL ADDMSG("WHAT? WHY AM I IN THE OFFICE?")
+    ELSE IF LNG$ = "FR" THEN
+        CALL ADDMSG("QUOI? MAIS QU'EST-CE QUE JE FAIS AU BUREAU, MOI?")
+    ELSE IF LNG$ = "PT" THEN
+        CALL ADDMSG("O QUE? O QUE ESTOU FAZENDO NO ESCRITORIO?")
+    END IF
+    
+    REPEAT
+        'IS PLAYER ENTERING NEXT ROOM?
+        IF ROOMCHANGING THEN
+            FADERVALUE = FADERVALUE + FADEROFFSET
+
+            'CHECK FADER VALUE LIMITS
+            IF FADERVALUE >= 1.0 THEN
+                'MAX VALUE REACHED, CONFIGURE PLAYER POS AND NEXT ROOM
+                FADEROFFSET = -FADEROFFSET
+                FADERVALUE  =  1.0
+                CHARDATA(0) =  NEXTPOSX
+                CHARDATA(1) =  NEXTPOSY
+                PLAYERDIR   =  NEXTDIR
+
+                STOP
+
+                'CLEAR THE PREVIOUS SCENE
+                CLS 1
+                SPRITE OFF
+
+                'GAME END REACHED?
+                IF LY < 5 THEN
+                    'LOAD THE NEXT LEVEL
+                    CALL LOADLEVEL(LX, LY)
+
+                    'DRAW THE NEXT SCENE
+                    CALL DRAWSTATICSCENE
+                ELSE
+                    'DRAW THE END SCENE, BEFORE FADE IT IN
+                    CLS
+                    SPRITE OFF
+
+                    PALETTES(6, 1) = 14
+                    PALETTES(6, 2) = 9
+
+                    PAL 5
+
+                    'DRAW THE TEXT
+                    IF LNG$ = "EN" THEN
+                        TEXT 6, 3,  "A DREAM!"
+                        TEXT 0, 4,  "NOTHING BUT A DREAM!"
+                        PAL 4
+                        TEXT 2, 13, "CONGRATULATIONS!"
+                    ELSE IF LNG$ = "FR" THEN
+                        TEXT 6, 3,  "UN REVE!"
+                        TEXT 2, 4,  "A PEINE UN REVE!"
+                        PAL 4
+                        TEXT 3, 13, "FELICITATIONS!"
+                    ELSE IF LNG$ = "PT" THEN
+                        TEXT 5,  3, "UM SONHO!"
+                        TEXT 0,  4, "FOI APENAS UM SONHO!"
+                        PAL 4
+                        TEXT 5, 13, "PARABENS!"
+                    END IF
+
+                    'DRAW THE BED
+                    BG 1
+                    PAL 5
+                    CELL 8,  8, 86
+                    CELL 9,  8, 87
+                    CELL 8,  9, 88
+                    CELL 9,  9, 89
+                    CELL 10, 9, 90
+
+                    'DRAW THE COVERS
+                    BG 0
+                    PAL 2
+                    CELL 9,  8, 91
+                    CELL 8,  9, 92
+                    CELL 9,  9, 93
+                    CELL 10, 9, 94
+
+                    'DRAW THE CHARACTER
+                    SPRITE 0 PAL 1 FLIP 1, 0
+                    SPRITE 0, 70, 64, 64
+                    SPRITE 1 PAL 1
+                    SPRITE 1, 70, 70, 95
+                END IF
+            ELSE IF FADERVALUE <= 0.0 THEN
+                'MIN FADE VALUE REACHED, STOP THE TRANSITION
+                FADEROFFSET  = -FADEROFFSET
+                FADERVALUE   =  0.0
+                ROOMCHANGING =  0
+            END IF
+
+            'FADE THE WHOLE SCENE IN OR OUT
+            CALL FADEPALETTES(0, FADERVALUE, 6)
+        END IF
+
+        IF LY < 5 THEN
+            CALL MOVEPLAYER
+            CALL ANIMSCENEITEMS
+            CALL DRAWSCENE
+            CALL DRAWINTERFACE
+            CALL SHOWMSG
+        END IF
+
+        WAIT VBL
+    UNTIL ((PLAYERLIFE=0 AND CHEAT<5) OR LY=5) AND ROOMCHANGING=0
+
+    STOP
+
+    'GAME COMPLETED OR GAME OVER?
+    IF LY = 5 THEN
+        MUSIC
+
+        REPEAT
+        UNTIL MUSIC(0) = 2
+    ELSE
+        'SHOW THE GAME OVER MESSAGE
+        BG 0
+        PAL 3
+        TEXT 5, 2, "GAME  OVER"
+
+        'PLAY THE GAME OVER SOUND
+        MUSIC 10
+
+        'WAIT UNTIL GAME OVER SOUND IS FULLY PLAYED
+        REPEAT
+            WAIT VBL
+        UNTIL (MUSIC(1) = 31)
+    END IF
+END SUB
+
+'***************************************
+'RESET THE GAME
+'***************************************
+SUB RESETGAME
+    'RESET THE PLAYER ON THE CENTER OF THE ROOM
+    CHARDATA(0) = ORIGIN(0)
+    CHARDATA(1) = ORIGIN(1)
+    CHARDATA(2) = 0.0
+    CHARDATA(3) = 0
+
+    'RESET PLAYER LIFE
+    PLAYERLIFE = 100
+
+    'RESET GAME VARIABLES
+    LX            = 2
+    LY            = 2
+    INFOMSG$      = ""
+    LASTDOOR      = 0
+    LASTHITITEM   = 0
+    DOEXITTRIGGER = 0
+    SHOWLOOPMSG   = 0
+
+    'CLEAR THE WALLET
+    FOR I = 0 TO UBOUND(WALLET) - 1
+        WALLET(I) = 0
+    NEXT I
+
+    'RESET THE CRYSTALS STATES
+    FOR I = 0 TO UBOUND(CRYSTALSTATE) - 1
+        CRYSTALSTATE(I) = 1
+    NEXT I
+
+    CLS
+
+    'RESET THE OBJECTS
+    CALL INITOBJECTS
+
+    'RESET THE FIRST PALETTE
+    PALETTE 0, 0, 42, 21, 0
+    
+    'LOAD THE FIRST LEVEL
+    CALL LOADLEVEL(LX, LY)
+
+    'DRAW THE SCENE PART WHICH WILL NOT CHANGE DURING SCENE LIFETIME
+    CALL DRAWSTATICSCENE
+
+    ON RASTER CALL SCROLLTEXTRASTERFUNC
+END SUB
+
+'***************************************
+'LOAD THE BOUNDING BOX COLLECTION
+'***************************************
+SUB LOADBBOX
+    RESTORE BBOXDATA
+
+    FOR I = 0 TO UBOUND(BBOX) - 1
+        FOR J = 0 TO UBOUND(BBOX, 2) - 1
+            READ BBOX(I, J)
+        NEXT J
+    NEXT I
+END SUB
+
+'***************************************
+'LOAD THE SPRITE COLLECTION
+'***************************************
+SUB LOADSPRITES
+    RESTORE COLLECTIONDATA
+
+    FOR I = 0 TO UBOUND(COLLECTION) - 1
+        FOR J = 0 TO UBOUND(COLLECTION, 2) - 1
+            READ COLLECTION(I, J)
+        NEXT J
+    NEXT I
+END SUB
+
+'***************************************
+'LOAD THE DOORS DATA
+'***************************************
+SUB LOADDOORS
+    RESTORE DOORDATA
+
+    FOR I = 0 TO UBOUND(DOORS) - 1
+        FOR J = 1 TO UBOUND(DOORS, 2) - 2
+            READ DOORS(I, J)
+        NEXT J
+    NEXT I
+END SUB
+
+'***************************************
+'LOAD A LEVEL
+'X - X COORINATE INDEX
+'Y - Y COORDINATE INDEX
+'***************************************
+SUB LOADLEVEL(X, Y)
+    'PUT THE CURSOR ON THE DATA TO LOAD
+    IF X = 0 AND Y = 0 THEN
+        RESTORE LEVEL00
+    ELSE IF X = 0 AND Y = 1 THEN
+        RESTORE LEVEL01
+    ELSE IF X = 0 AND Y = 2 THEN
+        RESTORE LEVEL02
+    ELSE IF X = 0 AND Y = 3 THEN
+        RESTORE LEVEL03
+    ELSE IF X = 0 AND Y = 4 THEN
+        RESTORE LEVEL04
+    ELSE IF X = 1 AND Y = 0 THEN
+        RESTORE LEVEL10
+    ELSE IF X = 1 AND Y = 1 THEN
+        RESTORE LEVEL11
+    ELSE IF X = 1 AND Y = 2 THEN
+        RESTORE LEVEL12
+    ELSE IF X = 1 AND Y = 3 THEN
+        RESTORE LEVEL13
+    ELSE IF X = 1 AND Y = 4 THEN
+        RESTORE LEVEL14
+    ELSE IF X = 2 AND Y = 0 THEN
+        RESTORE LEVEL20
+    ELSE IF X = 2 AND Y = 1 THEN
+        RESTORE LEVEL21
+    ELSE IF X = 2 AND Y = 2 THEN
+        RESTORE LEVEL22
+    ELSE IF X = 2 AND Y = 3 THEN
+        RESTORE LEVEL23
+    ELSE IF X = 2 AND Y = 4 THEN
+        RESTORE LEVEL24
+    ELSE IF X = 3 AND Y = 0 THEN
+        RESTORE LEVEL30
+    ELSE IF X = 3 AND Y = 1 THEN
+        RESTORE LEVEL31
+    ELSE IF X = 3 AND Y = 2 THEN
+        RESTORE LEVEL32
+    ELSE IF X = 3 AND Y = 3 THEN
+        RESTORE LEVEL33
+    ELSE IF X = 3 AND Y = 4 THEN
+        RESTORE LEVEL34
+    ELSE IF X = 4 AND Y = 0 THEN
+        RESTORE LEVEL40
+    ELSE IF X = 4 AND Y = 1 THEN
+        RESTORE LEVEL41
+    ELSE IF X = 4 AND Y = 2 THEN
+        RESTORE LEVEL42
+    ELSE IF X = 4 AND Y = 3 THEN
+        RESTORE LEVEL43
+    ELSE IF X = 4 AND Y = 4 THEN
+        RESTORE LEVEL44
+    ELSE IF X > 4 OR Y > 4 THEN
+        EXIT SUB
+    END IF
+
+    'READ NUMBER OF ITEMS IN SCENE
+    READ COUNT
+
+    'USE THE COUNT TO DETECT SPECIAL ROOMS
+    IF COUNT = 98 THEN
+        TOXICROOM = 1
+        LASERROOM = 0
+
+        'NEXT VALUE IS THE REAL COUNT VALUE
+        READ COUNT
+    ELSE IF COUNT = 99 THEN
+        TOXICROOM = 0
+        LASERROOM = 1
+
+        'NEXT VALUE IS THE REAL COUNT VALUE
+        READ COUNT
+    ELSE
+        TOXICROOM = 0
+        LASERROOM = 0
+    END IF
+
+    'ITERATE THROUGH OBJECTS TO CREATE
+    FOR I = 1 TO COUNT
+        'READ NEXT ITEM FROM SCENE DATA
+        FOR J = 0 TO UBOUND(SCENEITEMS, 2) - 6
+            READ SCENEITEMS(I, J)
+        NEXT J
+
+        VISIBLE =  1
+        OBJIDX  = -1
+
+        IF SCENEITEMS(I, 3) >= 100 THEN
+            OBJIDX  = SCENEITEMS(I, 3) - 100
+            OBJTYPE = OBJECTS(OBJIDX, 0)
+
+            'CONVERT ALIAS TO INDEX AND CHECK IF OBJECT IS VISIBLE
+            IF OBJTYPE = 0 OR OBJECTS(OBJIDX, 1) = 1 THEN
+                SCENEITEMS(I, 3) = 39
+                VISIBLE          = 0
+            ELSE
+                CALL OBJTOITEM(OBJTYPE, I)
+            END IF
+        END IF
+
+        IF SCENEITEMS(I, 3) = 33 AND CRYSTALSTATE(0) = 0 THEN
+            SCENEITEMS(I, 3) = 35
+        ELSE IF SCENEITEMS(I, 3) = 34 AND CRYSTALSTATE(1) = 0 THEN
+            SCENEITEMS(I, 3) = 36
+        ELSE IF SCENEITEMS(I, 3) = 48 AND CRYSTALSTATE(2) = 0 THEN
+            SCENEITEMS(I, 3) = 35
+        ELSE IF SCENEITEMS(I, 3) = 49 AND CRYSTALSTATE(3) = 0 THEN
+            SCENEITEMS(I, 3) = 36
+        END IF
+
+        'UPDATE ITEM VISIBILITY AND RESET ITS ANIMATION DATA
+        SCENEITEMS(I, UBOUND(SCENEITEMS, 2) - 5) = VISIBLE
+        SCENEITEMS(I, UBOUND(SCENEITEMS, 2) - 4) = 0
+        SCENEITEMS(I, UBOUND(SCENEITEMS, 2) - 3) = 0
+        SCENEITEMS(I, UBOUND(SCENEITEMS, 2) - 2) = 0
+        SCENEITEMS(I, UBOUND(SCENEITEMS, 2) - 1) = OBJIDX
+    NEXT I
+
+    'HIDE ALL UNUSED ITEMS
+    FOR I = COUNT + 1 TO UBOUND(SCENEITEMS) - 1
+        SCENEITEMS(I, 3) = 0
+        SCENEITEMS(I, 5) = 0
+    NEXT I
+
+    'READ THE DOORS CONFIGURATION FOR THE CURRENT ROOM
+    FOR I = 0 TO UBOUND(DOORS) - 1
+        READ DOORS(I, 0)
+        READ DOORS(I, 7)
+    NEXT I
+
+    'READ THE GROUND PALETTE
+    FOR I = 1 TO 3
+        READ R
+        READ G
+        READ B
+        PALETTES(0, I) = (R * 16) + (G * 4) + B
+    NEXT I
+
+    'CLEAR FIREBALL AND LASER DATA
+    FIREBALLPOS     = 0.0
+    FIREBALLDELAY   = 0
+    LASEREFFECTTIME = 0
+
+    'IS LEVEL A LASER OR TOXIC ROOMS
+    IF TOXICROOM = 1 THEN
+        'CHANGE PALETTES TO SHOW TOXIC ROOM
+        PALETTES(0, 1) = 12
+        PALETTES(0, 2) = 8
+        PALETTES(0, 3) = 4
+        PALETTES(3, 1) = 12
+        PALETTES(3, 2) = 8
+        PALETTES(3, 3) = 4
+
+        HASMASK = 0
+        CALL WALLETCONTAINS(8, HASMASK)
+
+        'ALSO SHOW THE WARNING MESSAGE, IF NEEDED
+        IF HASMASK = 0 THEN
+            IF LNG$ = "EN" THEN
+                CALL ADDMSG("THERE IS A STRANGE SMELL...")
+            ELSE IF LNG$ = "FR" THEN
+                CALL ADDMSG("IL Y A UNE ODEUR ETRANGE...")
+            ELSE IF LNG$ = "PT" THEN
+                CALL ADDMSG("TEM UM CHEIRO ESTRANHO...")
+            END IF
+        END IF
+    ELSE IF LASERROOM = 1 THEN
+        'CHANGE PALETTE TO SHOW RED LASER
+        PALETTES(3, 1) = 63
+        PALETTES(3, 2) = 42
+        PALETTES(3, 3) = 21
+        PALETTES(5, 1) = 58
+        PALETTES(5, 2) = 53
+        PALETTES(5, 3) = 32
+
+        'ALSO SHOW THE WARNING MESSAGE, IF NEEDED
+        IF LX = 4 AND LY = 0 THEN
+            IF LNG$ = "EN" THEN
+                CALL ADDMSG("LASERS? SINCE WHEN ARE THERE HERE?")
+            ELSE IF LNG$ = "FR" THEN
+                CALL ADDMSG("DES LASERS? DEPUIS QUAND IL Y EN A ICI?")
+            ELSE IF LNG$ = "PT" THEN
+                CALL ADDMSG("LASERS? DESDE QUANDO TEM ISTO AQUI?")
+            END IF
+        END IF
+    ELSE
+        IF LX = 2 AND LY = 4 THEN
+            PALETTES(6, 1) = 58
+            PALETTES(6, 2) = 53
+        ELSE
+            PALETTES(6, 1) = 14
+            PALETTES(6, 2) = 9
+        END IF
+
+        'RESTORE DEFAULT PALETTES
+        PALETTES(3, 1) = 63
+        PALETTES(3, 2) = 42
+        PALETTES(3, 3) = 21
+        PALETTES(5, 1) = 57
+        PALETTES(5, 2) = 36
+        PALETTES(5, 3) = 16
+    END IF
+END SUB
+
+'***************************************
+'INITIALIZE THE OBJECTS DATA
+'***************************************
+SUB INITOBJECTS
+    FOR I = 0 TO UBOUND(OBJECTS) - 1
+        OBJECTS(I, 0) = I + 1
+        OBJECTS(I, 1) = 0
+    NEXT I
+END SUB
+
+'***************************************
+'SAVE THE PALETTES
+'***************************************
+SUB SAVEPALETTES
+    FOR I = 0 TO UBOUND(PALETTES, 1) - 1
+        FOR J = 0 TO UBOUND(PALETTES, 2) - 1
+            PALETTES(I, J) = COLOR(I, J)
+        NEXT J
+    NEXT I
+END SUB
+
+'***************************************
+'FADE THE WHOLE PALETTE WITH A TARGET COLOR
+'TARGETCOL - TARGET COLOR TO REACH
+'VALUE - BLENDING VALUE BETWEEN 0.0 AND 1.0
+'LIMIT - PALETTE UNTIL WHICH THE VALUE SHOULD BE APPLIED
+'***************************************
+SUB FADEPALETTES(TARGETCOL, VALUE, LIMIT)
+    DIM C(4)
+
+    MAXPAL = UBOUND(PALETTES, 1) - 1
+
+    IF LIMIT < MAXPAL THEN
+        MAXPAL = LIMIT
+    END IF
+
+    'BLEND EACH PALETTE COLORS WITH TARGET COLOR
+    FOR I = 0 TO MAXPAL
+        CALL BLENDCOLORS(PALETTES(I, 0), TARGETCOL, VALUE, C(0))
+        CALL BLENDCOLORS(PALETTES(I, 1), TARGETCOL, VALUE, C(1))
+        CALL BLENDCOLORS(PALETTES(I, 2), TARGETCOL, VALUE, C(2))
+        CALL BLENDCOLORS(PALETTES(I, 3), TARGETCOL, VALUE, C(3))
+
+        PALETTE I, C(0), C(1), C(2), C(3)
+    NEXT I
+END SUB
+
+'***************************************
+'BLEND COLORS TOGETHER
+'STARTCOL - START COLOR TO BLEND
+'ENDCOL - END COLOR TO BLEND WITH
+'VALUE - BLENDING VALUE BETWEEN 0.0 AND 1.0
+'RESULT[OUT] - BLENDED COLOR
+'***************************************
+SUB BLENDCOLORS(STARTCOL, ENDCOL, VALUE, RESULT)
+    'GET THE START COLOR RGB COMPONENTS
+    STARTR = INT(STARTCOL / 16)
+    STARTG = INT(STARTCOL / 4) MOD 4
+    STARTB =     STARTCOL      MOD 4
+
+    'GET THE END COLOR RGB COMPONENTS
+    ENDR = INT(ENDCOL / 16)
+    ENDG = INT(ENDCOL / 4) MOD 4
+    ENDB =     ENDCOL      MOD 4
+
+    'BLEND COLOR RGB COMPONENTS TOGETHER
+    RESULTR = INT(STARTR + ((ENDR - STARTR) * VALUE))
+    RESULTG = INT(STARTG + ((ENDG - STARTG) * VALUE))
+    RESULTB = INT(STARTB + ((ENDB - STARTB) * VALUE))
+
+    'BUILD THE RESULTING BLENDED COLOR
+    RESULT = RESULTR * 16 + RESULTG * 4 + RESULTB
+END SUB
+
+'***************************************
+'ADD AN INFO MESSAGE TO SHOW
+'MSG$ - MESSAGE TO ADD
+'***************************************
+SUB ADDMSG(MSG$)
+    IF LEN(INFOMSG$) THEN
+        INFOMSG$ = INFOMSG$ + " - "
+    END IF
+
+    INFOMSG$ = INFOMSG$ + MSG$
+END SUB
+
+'***************************************
+'SHOW THE SCROLLING MESSAGE ON BOTTOM
+'***************************************
+SUB SHOWMSG
+    PAL 7
+
+    INC MSGX
+    
+    IF QUICKTEXT = 1 THEN
+        INC MSGX
+    END IF
+
+    IF MSGX >= 256 THEN
+        MSGX = 0
+    END IF
+
+    'DO DRAW THE NEXT CHAR?
+    IF (MSGX MOD 8) = 0 THEN
+        BG 0
+
+        'CALCULATE THE NEXT POS ON THE RIGHT, OUT OF THE SCREEN
+        TX = 20 + (MSGX \ 8)
+        TY = 14
+
+        L  = LEN(INFOMSG$)
+        C$ = " "
+
+        'ALL THE TEXT WAS DRAWN?
+        IF L THEN
+            'GET THE NEXT CHAR TO DRAW
+            C$ = MID$(INFOMSG$, 1, 1)
+
+            'REMOVE LAST DRAWN CHAR FROM STRING
+            INFOMSG$ = RIGHT$(INFOMSG$, L - 1)
+        END IF
+
+        'DRAW THE NEXT CHAR
+        TEXT TX, TY, C$
+    END IF
+END SUB
+
+'***************************************
+'CONVERT OBJECT TYPE TO SCENE ITEM SPRITE INDEX
+'OBJTYPE - OBJECT TYPE TO CONVERT
+'INDEX - SCENE ITEM INDEX IN WHICH SPRITE INDEX WILL BE WRITTEN
+'***************************************
+SUB OBJTOITEM(OBJTYPE, INDEX)
+    IF OBJTYPE = 1 THEN
+        SCENEITEMS(INDEX, 3) = 40
+    ELSE IF OBJTYPE = 2 THEN
+        SCENEITEMS(INDEX, 3) = 41
+    ELSE IF OBJTYPE = 3 THEN
+        SCENEITEMS(INDEX, 3) = 42
+    ELSE IF OBJTYPE = 4 THEN
+        SCENEITEMS(INDEX, 3) = 39
+    ELSE IF OBJTYPE = 5 THEN
+        SCENEITEMS(INDEX, 3) = 43
+    ELSE IF OBJTYPE = 6 THEN
+        SCENEITEMS(INDEX, 3) = 44
+    ELSE IF OBJTYPE = 7 THEN
+        SCENEITEMS(INDEX, 3) = 45
+    ELSE IF OBJTYPE = 8 THEN
+        SCENEITEMS(INDEX, 3) = 50
+    ELSE IF OBJTYPE = 9 THEN
+        SCENEITEMS(INDEX, 3) = 51
+    END IF
+END SUB
+
+'***************************************
+'SHOW THE FOUND AN OBJECT MESSAGE
+'INDEX - OBJECT INDEX
+'***************************************
+SUB SHOWFOUNDOBJMSG(INDEX)
+    IF INDEX = 1 THEN
+        IF LNG$ = "EN" THEN
+            CALL ADDMSG("FOUND THE RED CARD!")
+        ELSE IF LNG$ = "FR" THEN
+            CALL ADDMSG("CARTE ROUGE TROUVEE!")
+        ELSE IF LNG$ = "PT" THEN
+            CALL ADDMSG("ACHEI A CARTA VERMELHA!")
+        END IF
+    ELSE IF INDEX = 2 THEN
+        IF LNG$ = "EN" THEN
+            CALL ADDMSG("FOUND THE GREEN CARD!")
+        ELSE IF LNG$ = "FR" THEN
+            CALL ADDMSG("CARTE VERTE TROUVEE!")
+        ELSE IF LNG$ = "PT" THEN
+            CALL ADDMSG("ACHEI A CARTA VERDE!")
+        END IF
+    ELSE IF INDEX = 3 THEN
+        IF LNG$ = "EN" THEN
+            CALL ADDMSG("FOUND THE BLUE CARD!")
+        ELSE IF LNG$ = "FR" THEN
+            CALL ADDMSG("CARTE BLEUE TROUVEE!")
+        ELSE IF LNG$ = "PT" THEN
+            CALL ADDMSG("ACHEI A CARTA AZUL!")
+        END IF
+    ELSE IF INDEX = 4 OR INDEX = 5 OR INDEX = 6 OR INDEX = 7 THEN
+        IF LNG$ = "EN" THEN
+            CALL ADDMSG("FOUND A PENDRIVE!")
+        ELSE IF LNG$ = "FR" THEN
+            CALL ADDMSG("CLE USB TROUVEE!")
+        ELSE IF LNG$ = "PT" THEN
+            CALL ADDMSG("ACHEI O PENDRIVE!")
+        END IF
+    ELSE IF INDEX = 8 THEN
+        IF LNG$ = "EN" THEN
+            CALL ADDMSG("FOUND A GAS MASK!")
+        ELSE IF LNG$ = "FR" THEN
+            CALL ADDMSG("MASQUE A GAZ TROUVE!")
+        ELSE IF LNG$ = "PT" THEN
+            CALL ADDMSG("ACHEI UMA MASCARA RESPIRATORIA!")
+        END IF
+    ELSE IF INDEX = 9 THEN
+        IF LNG$ = "EN" THEN
+            CALL ADDMSG("FOUND A CLOCK!")
+        ELSE IF LNG$ = "FR" THEN
+            CALL ADDMSG("HORLOGE TROUVEE!")
+        ELSE IF LNG$ = "PT" THEN
+            CALL ADDMSG("ACHEI UM RELOGIO!")
+        END IF
+    END IF
+END SUB
+
+'***************************************
+'CHECK IF WALLET CONTAINS AN OBJECT
+'INDEX - OBJECT INDEX TO CHECK
+'[OUT] R - IF 1 WALLET CONTAINS THE OBJECT, OTHERWISE 0
+'***************************************
+SUB WALLETCONTAINS(INDEX, R)
+    R = 0
+
+    FOR I = 0 TO UBOUND(WALLET) - 1
+        IF WALLET(I) = INDEX THEN
+            R = 1
+            EXIT SUB
+        END IF
+    NEXT I
+END SUB
+
+'***************************************
+'ADD AN OBJECT TO THE WALLET
+'INDEX - OBJECT INDEX TO ADD
+'***************************************
+SUB ADDOBJTOWALLET(INDEX)
+    FOR I = 0 TO UBOUND(WALLET) - 1
+        IF WALLET(I) = 0 THEN
+            OBJIDX               = SCENEITEMS(INDEX, 9)
+            WALLET(I)            = OBJECTS(OBJIDX, 0)
+            OBJECTS(OBJIDX, 1)   = 1
+            SCENEITEMS(INDEX, 5) = 0
+            CUROBJ               = WALLET(I)
+
+            CALL SHOWFOUNDOBJMSG(CUROBJ)
+
+            'CLEAR ALL SCENE SPRITES (CAN'T KNOW CURRENT OBJ SPRITE)
+            SPRITE OFF 18 TO 63
+
+            TRACK 10, 1
+            EXIT SUB
+        END IF
+    NEXT I
+
+    IF DOEXITTRIGGER = 0 THEN
+        CALL THROWOBJFROMWALLET(INDEX)
+    END IF
+END SUB
+
+'***************************************
+'REMOVE AN OBJECT FROM THE WALLET
+'INDEX - OBJECT INDEX TO REMOVE
+'***************************************
+SUB REMOVEOBJFROMWALLET(INDEX)
+    FOR I = 0 TO UBOUND(WALLET) - 1
+        IF WALLET(I) = INDEX THEN
+            TRACK 10, 1
+            WALLET(I) = 0
+            EXIT SUB
+        END IF
+    NEXT I
+END SUB
+
+'***************************************
+'THROW AN OBJECT FROM THE WALLET
+'INDEX - OBJECT INDEX TO ADD
+'***************************************
+SUB THROWOBJFROMWALLET(INDEX)
+    IF LNG$ = "EN" THEN
+        TEXT 0, 0, "SELECT AN OBJECT TO"
+        TEXT 7, 1, "THROW"
+    ELSE IF LNG$ = "FR" THEN
+        TEXT 0, 0, "CHOISISSEZ UN OBJET"
+        TEXT 6, 1, "A JETER"
+    ELSE IF LNG$ = "PT" THEN
+        TEXT 0, 0, "SELECIONE UM OBJETO"
+        TEXT 5, 1, "PARA JOGAR"
+    END IF
+
+    PAL 3
+    BG 1
+
+    WALLETINDEX = 0
+
+    'SELECT THE OBJECT TO THROW
+    REPEAT
+        FOR I = 2 TO 6
+            CELL I, 13, 0
+        NEXT I
+
+        CELL WALLETINDEX + 2, 13, 120
+
+        IF LEFT TAP(0) THEN
+            DEC WALLETINDEX
+        ELSE IF RIGHT TAP(0) THEN
+            INC WALLETINDEX
+        END IF
+
+        IF WALLETINDEX < 0 THEN
+            WALLETINDEX = 3
+        ELSE IF WALLETINDEX > 3 THEN
+            WALLETINDEX = 0
+        END IF
+
+        WAIT VBL
+    UNTIL BUTTON(0, 0)
+
+    OLDOBJIDX = 0
+    NEWOBJIDX = SCENEITEMS(INDEX, 9)
+
+    'SEARCH FOR OBJECT TO THROW IN THE OBJECT LIST
+    FOR I = 0 TO UBOUND(OBJECTS) - 1
+        IF OBJECTS(I, 0) = WALLET(WALLETINDEX) THEN
+            OLDOBJIDX = I
+        END IF
+    NEXT I
+
+    'SWAP OBJECTS BETWEEN SCENE AND WALLET
+    WALLET(WALLETINDEX)   = OBJECTS(NEWOBJIDX, 0)
+    TEMP                  = OBJECTS(OLDOBJIDX, 0)
+    OBJECTS(OLDOBJIDX, 0) = OBJECTS(NEWOBJIDX, 0)
+    OBJECTS(OLDOBJIDX, 1) = 1
+    OBJECTS(NEWOBJIDX, 0) = TEMP
+    OBJECTS(NEWOBJIDX, 1) = 0
+
+    CALL OBJTOITEM(OBJECTS(NEWOBJIDX, 0), INDEX)
+
+    'CLEAR THE INTERFACE
+    TEXT 0, 0, "                   "
+    TEXT 0, 1, "                   "
+
+    FOR I = 2 TO 6
+        CELL I, 13, 0
+    NEXT I
+
+    'SHOW FOUND AN OBJECT MESSAGE AND PLAY THE FOUND OBJECT SOUND
+    CALL SHOWFOUNDOBJMSG(WALLET(WALLETINDEX))
+    TRACK 10, 1
+
+    'NOTIFY THAT OBJECT TRIGGER SHOULD BE EXITED BEFORE BE ACTIVE AGAIN
+    DOEXITTRIGGER = 1
+END SUB
+
+'***************************************
+'MOVE THE PLAYER AND CHECK HIS POSITION
+'***************************************
+SUB MOVEPLAYER
+    ISWALKING = 0
+    PREVPOSX  = CHARDATA(0)
+    PREVPOSY  = CHARDATA(1)
+    PREVPOSZ  = CHARDATA(2)
+
+    'HANDLE THE USER INPUT
+    IF ROOMCHANGING = 0 THEN
+        UU = UP(0)
+        DD = DOWN(0)
+        LL = LEFT(0)
+        RR = RIGHT(0)
+
+        IF (USEDIAGS AND LL AND DD) OR (USEDIAGS = 0 AND LL) THEN
+            'LEFT MOVE
+            ADD CHARDATA(0), PLAYERVELOCITY
+            PLAYERDIR = 0
+            ISWALKING = 1
+        ELSE IF (USEDIAGS AND DD AND RR) OR (USEDIAGS = 0 AND DD) THEN
+            'DOWN MOVE
+            ADD CHARDATA(1), PLAYERVELOCITY
+            PLAYERDIR = 2
+            ISWALKING = 1
+        ELSE IF (USEDIAGS AND RR AND UU) OR (USEDIAGS = 0 AND RR) THEN
+            'RIGHT MOVE
+            ADD CHARDATA(0), -PLAYERVELOCITY
+            PLAYERDIR = 1
+            ISWALKING = 1
+        ELSE IF (USEDIAGS AND UU AND LL) OR (USEDIAGS = 0 AND UU) THEN
+            'UP MOVE
+            ADD CHARDATA(1), -PLAYERVELOCITY
+            PLAYERDIR = 3
+            ISWALKING = 1
+        END IF
+    END IF
+
+    X      = CHARDATA(0)
+    Y      = CHARDATA(1)
+    Z      = CHARDATA(2)
+    HITRBT = 0
+    HITSCN = 0
+    HITLMT = 0
+    HITOBJ = 0
+    VALID  = 0
+
+    'CHECK IF NEXT PLAYER POSITION IS VALID
+    CALL CHECKPOS(X,Y,Z, -1, 1, HITRBT,HITSCN,HITLMT,HITOBJ, VALID)
+
+    'HIT SOMETHING IN THE SCENE? REVERT POSITION IF YES
+    IF (VALID = 0 AND HITOBJ >= 0) THEN
+        'GET THE ITEM TYPE
+        ITEMTYPE = SCENEITEMS(HITOBJ, 3)
+
+        'IS HIT OBJECT A TERMINAL OR A COLLECTABLE?
+        IF ITEMTYPE >= 17 AND ITEMTYPE <= 18 THEN
+            CHARDATA(0) = PREVPOSX
+            CHARDATA(1) = PREVPOSY
+            CHARDATA(2) = PREVPOSZ
+            ISWALKING   = 0
+
+            IF ITEMTYPE <> LASTHITITEM THEN
+                LASTHITITEM = ITEMTYPE
+                CALL ONHITTERMINAL
+            END IF
+        ELSE
+            LASTHITITEM = 0
+            CALL ADDOBJTOWALLET(HITOBJ)
+        END IF
+    ELSE IF (VALID = 0 AND HITRBT = 0) OR (HITSCN OR HITLMT) THEN
+        CHARDATA(0) = PREVPOSX
+        CHARDATA(1) = PREVPOSY
+        CHARDATA(2) = PREVPOSZ
+        ISWALKING   = 0
+        LASTHITITEM = 0
+    ELSE
+        DOEXITTRIGGER = 0
+    END IF
+
+    'HIT A ROBOT?
+    IF HITRBT = 1 THEN
+        IF PLAYERLIFE > 0 THEN
+            'DECREASE LIFE AND PLAY LOSING LIFE SOUND
+            DEC PLAYERLIFE
+            TRACK 2, 1
+        END IF
+    END IF
+
+    DOOR = 0
+    PDIR = PLAYERDIR
+
+    'CHECK IF PLAYER IS FACING A DOOR
+    CALL CHECKDOOR(CHARDATA(0), CHARDATA(1), CHARDATA(2), PDIR, DOOR)
+
+    'A DOOR WAS REACHED?
+    IF DOOR <> 0 THEN
+        CALL ONPLAYERREACHEDDOOR(DOOR)
+    ELSE
+        LASTDOOR = 0
+    END IF
+
+    FRAME = 0
+
+    'ANIMATE PLAYER IF WALKING
+    IF ISWALKING THEN
+        FRAME = CHARDATA(3) \ 5
+
+        'PLAY THE STEP SOUND EVERY LOOP
+        IF CHARDATA(3) = 0 THEN
+            TRACK 0, 3
+        END IF
+    END IF
+
+    INDEX = 0
+
+    'ADD THE PLAYER SPRITE TO THE SCENE
+    SCENEITEMS(INDEX, 0) = CHARDATA(0)
+    SCENEITEMS(INDEX, 1) = CHARDATA(1)
+    SCENEITEMS(INDEX, 2) = CHARDATA(2)
+    SCENEITEMS(INDEX, 3) = ((PLAYERDIR MOD 2) * 2) + FRAME
+    SCENEITEMS(INDEX, 4) =   PLAYERDIR > 1
+    SCENEITEMS(INDEX, 5) = 1
+
+    CHARDATA(3) = (CHARDATA(3) + 1) MOD 10
+END SUB
+
+'***************************************
+'CHECK IF PLAYER IS FACING A DOOR
+'X - CHARACTER X POSITION
+'Y - CHARACTER Y POSITION
+'Z - CHARACTER Z POSITION
+'PDIR - PLAYER DIRECTION
+'R[OUT] - RESULT, WHERE:
+'         0 - NO DOOR
+'         1 - TOP DOOR
+'         2 - RIGHT DOOR
+'         3 - BOTTOM DOOR
+'         4 - LEFT DOOR
+'***************************************
+SUB CHECKDOOR(X, Y, Z, PDIR, R)
+    R      = 0
+    RESULT = 0
+
+    'CHECK THE TOP DOOR IF VISIBLE AND PLAYER IS WALKING AGAINST IT
+    IF DOORS(0, 0) = 1 AND PDIR = 3 THEN
+        'IS PLAYER INSIDE DOOR TRIGGER?
+        CALL CHECKDOORTRIGGER(X, Y, Z, 0, RESULT)
+
+        IF RESULT = 1 THEN
+            R = 1
+            EXIT SUB
+        END IF
+    END IF
+
+    'CHECK THE RIGHT DOOR IF VISIBLE AND PLAYER IS WALKING AGAINST IT
+    IF DOORS(1, 0) = 1 AND PDIR = 1 THEN
+        'IS PLAYER INSIDE DOOR TRIGGER?
+        CALL CHECKDOORTRIGGER(X, Y, Z, 1, RESULT)
+
+        IF RESULT = 1 THEN
+            R = 2
+            EXIT SUB
+        END IF
+    END IF
+
+    'CHECK THE BOTTOM DOOR IF VISIBLE AND PLAYER IS WALKING AGAINST IT
+    IF DOORS(2, 0) = 1 AND PDIR = 2 THEN
+        'IS PLAYER INSIDE DOOR TRIGGER?
+        CALL CHECKDOORTRIGGER(X, Y, Z, 2, RESULT)
+
+        IF RESULT = 1 THEN
+            R = 3
+            EXIT SUB
+        END IF
+    END IF
+
+    'CHECK THE LEFT DOOR IF VISIBLE AND PLAYER IS WALKING AGAINST IT
+    IF DOORS(3, 0) = 1 AND PDIR = 0 THEN
+        'IS PLAYER INSIDE DOOR TRIGGER?
+        CALL CHECKDOORTRIGGER(X, Y, Z, 3, RESULT)
+
+        IF RESULT = 1 THEN
+            R = 4
+            EXIT SUB
+        END IF
+    END IF
+END SUB
+
+'***************************************
+'CHECK IF THE PLAYER CAN OPEN A DOOR
+'INDEX - DOOR INDEX TO CHECK
+'R[OUT] - IF 1, PLAYER CAN OPEN THE DOOR, CANNOT IF 0
+'***************************************
+SUB CANOPENDOOR(INDEX, R)
+    'NORMAL DOOR, I.E WITHOUT A PARTICULAR SECURITY LEVEL?
+    IF DOORS(INDEX, 7) = 0 THEN
+        R = 1
+        EXIT SUB
+    END IF
+
+    R = 0
+
+    'CHECK IF PLAYER HAS A MATCHING CARD IN HIS WALLET TO OPEN THE DOOR
+    FOR I = 0 TO UBOUND(WALLET) - 1
+        IF DOORS(INDEX, 7) = WALLET(I) THEN
+            R = 1
+            EXIT SUB
+        END IF
+    NEXT I
+END SUB
+
+'***************************************
+'SHOW A MESSAGE TO USER THAT A CARD IS REQUIRED TO OPEN THE DOOR
+'INDEX - DOOR INDEX
+'***************************************
+SUB SHOWNEEDCARDMSG(INDEX)
+    IF DOORS(INDEX, 7) = 1 THEN
+        IF LNG$ = "EN" THEN
+            CALL ADDMSG("I NEED A RED CARD!")
+        ELSE IF LNG$ = "FR" THEN
+            CALL ADDMSG("J'AI BESOIN D'UNE CARTE ROUGE!")
+        ELSE IF LNG$ = "PT" THEN
+            CALL ADDMSG("EU PRECISO DE UMA CARTA VERMELHA!")
+        END IF
+    ELSE IF DOORS(INDEX, 7) = 2 THEN
+        IF LNG$ = "EN" THEN
+            CALL ADDMSG("I NEED A GREEN CARD!")
+        ELSE IF LNG$ = "FR" THEN
+            CALL ADDMSG("J'AI BESOIN D'UNE CARTE VERTE!")
+        ELSE IF LNG$ = "PT" THEN
+            CALL ADDMSG("EU PRECISO DE UMA CARTA VERDE!")
+        END IF
+    ELSE IF DOORS(INDEX, 7) = 3 THEN
+        IF LNG$ = "EN" THEN
+            CALL ADDMSG("I NEED A BLUE CARD!")
+        ELSE IF LNG$ = "FR" THEN
+            CALL ADDMSG("J'AI BESOIN D'UNE CARTE BLEUE!")
+        ELSE IF LNG$ = "PT" THEN
+            CALL ADDMSG("EU PRECISO DE UMA CARTA AZUL!")
+        END IF
+    END IF
+END SUB
+
+'***************************************
+'ANIMATE THE SCENE ITEMS
+'***************************************
+SUB ANIMSCENEITEMS
+    'ITERATE THROUGH SCENE ITEMS
+    FOR I = 0 TO UBOUND(SCENEITEMS) - 1
+        'IS ITEM A ROBOT?
+        IF SCENEITEMS(I, 3) >= 4 AND SCENEITEMS(I, 3) <= 7 THEN
+            'ANIMATE AND MOVE THE ROBOT
+            IF CHEAT<7 THEN CALL MOVEROBOT(I)
+        ELSE IF SCENEITEMS(I, 3) = 33 OR SCENEITEMS(I, 3) = 34 THEN
+            'ANIMATE THE CRYSTAL ROOM (LEVEL 1 AND 2)
+            CALL ANIMATECRYSTALROOM(I)
+        ELSE IF SCENEITEMS(I, 3) = 48 OR SCENEITEMS(I, 3) = 49 THEN
+            'ANIMATE THE CRYSTAL ROOM (LEVEL 3 AND 4)
+            CALL ANIMATECRYSTALROOM(I)
+        END IF
+    NEXT I
+
+    'ANIMATE TOXIC AND LASER ROOMS
+    IF TOXICROOM THEN
+        CALL ANIMATETOXICROOM
+    ELSE IF LASERROOM THEN
+        CALL ANIMATELASERROOM
+    END IF
+
+    'ANIMATE COLORS IN SERVER ROOMS WITHOUT ROBOTS
+    IF (LX = 1 AND LY = 2) OR (LX = 0 AND LY = 4) THEN
+        CALL ANIMATEPALETTENB4(8)
+    END IF
+END SUB
+
+'***************************************
+'MOVE AND ANIMATE THE ROBOT
+'INDEX - SCENE ITEM INDEX CONTAINING THE ROBOT
+'***************************************
+SUB MOVEROBOT(INDEX)
+    IF ROOMCHANGING THEN
+        EXIT SUB
+    END IF
+
+    'ANIMATE THE ROBOT COLORS
+    CALL ANIMATEPALETTENB4(INDEX)
+
+    'KEEP CURRENT POS AND CALCULATE DIR
+    OLDPOSX   = SCENEITEMS(INDEX, 0)
+    OLDPOSY   = SCENEITEMS(INDEX, 1)
+    XTOPLAYER = SCENEITEMS(INDEX, 0) - CHARDATA(0)
+    YTOPLAYER = SCENEITEMS(INDEX, 1) - CHARDATA(1)
+
+    'CALCULATE THE NEXT ROBOT POSITION
+    IF (ABS(XTOPLAYER) > ABS(YTOPLAYER)) THEN
+        ADD SCENEITEMS(INDEX, 0), -0.5 * SGN(XTOPLAYER)
+    ELSE
+        ADD SCENEITEMS(INDEX, 1), -0.5 * SGN(YTOPLAYER)
+    END IF
+
+    'CHECK IF NEXT ROBOT POSITION IS VALID
+    X      = SCENEITEMS(INDEX, 0)
+    Y      = SCENEITEMS(INDEX, 1)
+    Z      = SCENEITEMS(INDEX, 2)
+    HITRBT = 0
+    HITSCN = 0
+    HITLMT = 0
+    HITOBJ = 0
+    VALID  = 0
+    CALL CHECKPOS(X,Y,Z, INDEX, 0, HITRBT,HITSCN,HITLMT,HITOBJ, VALID)
+
+    'NOT VALID, REVERT TO PREVIOUS KNOWN VALID POS
+    IF (VALID = 0 AND HITOBJ = -1) THEN
+        SCENEITEMS(INDEX, 0) = OLDPOSX
+        SCENEITEMS(INDEX, 1) = OLDPOSY
+    END IF
+
+    FRAME     = 0
+    ROBOTDIR  = SCENEITEMS(INDEX, 8)
+    ISWALKING = 0
+
+    'GET IF ROBOT IS WALKING AND MOVE DIR FROM OLD AND NEW POS
+    IF (SCENEITEMS(INDEX, 0) < OLDPOSX) THEN
+        ROBOTDIR  = 1
+        ISWALKING = 1
+    ELSE IF (SCENEITEMS(INDEX, 0) > OLDPOSX) THEN
+        ROBOTDIR  = 0
+        ISWALKING = 1
+    ELSE IF (SCENEITEMS(INDEX, 1) < OLDPOSY) THEN
+        ROBOTDIR  = 3
+        ISWALKING = 1
+    ELSE IF (SCENEITEMS(INDEX, 1) > OLDPOSY) THEN
+        ROBOTDIR  = 2
+        ISWALKING = 1
+    END IF
+
+    'ANIMATE ROBOT IF WALKING
+    IF ISWALKING THEN
+        FRAME = SCENEITEMS(INDEX, 6) \ 5
+
+        'PLAY THE STEP SOUND EVERY LOOP
+        IF SCENEITEMS(INDEX, 6) = 0 THEN
+            TRACK 1, 2
+        END IF
+    END IF
+
+    'UPDATE SCENE ITEM VALUES
+    SCENEITEMS(INDEX, 3) = 4 + ((ROBOTDIR MOD 2) * 2) + FRAME
+    SCENEITEMS(INDEX, 4) = ROBOTDIR > 1
+    SCENEITEMS(INDEX, 6) = (SCENEITEMS(INDEX, 6) + 1) MOD 10
+    SCENEITEMS(INDEX, 8) = ROBOTDIR
+END SUB
+
+'***************************************
+'ANIMATE PALETTE (NB 4) MATCHING WITH
+'ROBOTS OR ELECTRONIC ELEMENTS
+'INDEX - ITEM INDEX
+'NOTE BE AWARE THAT, IF MANY ITEMS ARE ANIMATED IN THE SAME TIME,
+'     THE LAST ITEM PALETTE WILL OVERRIDE ALL THE OTHERS
+'***************************************
+SUB ANIMATEPALETTENB4(INDEX)
+    IF ROOMCHANGING THEN
+        EXIT SUB
+    END IF
+
+    'CALCULATE BLENDING VALUE TO ANIMATE THE COLOR
+    VALUE = COS(SCENEITEMS(INDEX, 7) / 100)
+    
+    IF VALUE <= 0.0 THEN
+        VALUE = 0.0
+    END IF
+
+    'BLEND THE LAST PALETTE COLOR
+    C = 0
+    CALL BLENDCOLORS(PALETTES(4, 3), 0, VALUE, C)
+
+    'APPLY THE NEWLY BLENDED PALETTE
+    PALETTE 4, , , , C
+
+    'CALCULATE NEXT COLOR FRAME
+    ADD SCENEITEMS(INDEX, 7), 5
+
+    'OUT OF BOUNDS?
+    IF (SCENEITEMS(INDEX, 7) >= 628) THEN
+        SCENEITEMS(INDEX, 7) = 0
+    END IF
+END SUB
+
+'***************************************
+'MOVE AND ANIMATE THE CRYSTAL ROOM
+'INDEX - SCENE ITEM INDEX CONTAINING THE CRYSTAL
+'***************************************
+SUB ANIMATECRYSTALROOM(INDEX)
+    'PLAY THE ALARM SOUND
+    IF MUSIC(3) = 0 THEN
+        MUSIC 11
+
+        IF LNG$ = "EN" THEN
+            CALL ADDMSG("DANGER! INTRUDER DETECTED!")
+        ELSE IF LNG$ = "FR" THEN
+            CALL ADDMSG("DANGER! INTRUS DETECTE!")
+        ELSE IF LNG$ = "PT" THEN
+            CALL ADDMSG("PERIGO! INTRUSO DETECTADO!")
+        END IF
+    END IF
+
+    'ANIMATE CRYSTAL PALETTE
+    CALL ANIMATEPALETTENB4(INDEX)
+
+    'CALCULATE FIREBALL START POSITION
+    X = SCENEITEMS(INDEX, 0) + 0.5
+    Y = SCENEITEMS(INDEX, 1)
+    Z = SCENEITEMS(INDEX, 2) + 16.0
+
+    'CALCULATE LENGTH BETWEEN CRYSTAL AND PLAYER
+    XTOPLAYER = CHARDATA(0) - X
+    YTOPLAYER = CHARDATA(1) - Y
+    ZTOPLAYER = CHARDATA(2) - Z
+
+    'CAN START TO MOVE THE FIREBALL?
+    IF FIREBALLDELAY >= 50 THEN
+        'CALCULATE THE DELTA TO APPLY TO THE LENGTH
+        DELTA = FIREBALLPOS / 100
+
+        'MOVE FIREBALL
+        IF ROOMCHANGING = 0 THEN
+            ADD FIREBALLPOS, 2.0
+        END IF
+
+        'IF FIREBALL REACHED THE PLAYER, REMOVE ALL ITS LIFE
+        IF FIREBALLPOS >= 100 AND ROOMCHANGING = 0 THEN
+            PLAYERLIFE = 0
+        END IF
+    ELSE
+        DELTA = 0
+        INC FIREBALLDELAY
+    END IF
+
+    'CALCULATE FIREBALL FRAME
+    FRAME = 46 + INT(SCENEITEMS(INDEX + 1, 6) / 32)
+
+    'CALCULATE FINAL BALL POSITION
+    XPOS = X + (XTOPLAYER * DELTA)
+    YPOS = Y + (YTOPLAYER * DELTA)
+    ZPOS = Z + (ZTOPLAYER * DELTA)
+
+    'PREVENT BALL TO GO OUT OF BOUNDS
+    IF FIREBALLPOS > 100 THEN
+        XPOS = X
+        YPOS = Y
+        ZPOS = Z
+    END IF
+
+    'ADD THE FIREBALL SPRITE TO THE SCENE. NOTE INDEX + 1 BECAUSE A
+    'CRYSTAL ROOM ALWAYS CONTAINS ONLY THE PLAYER AND A CRYSTAL
+    SCENEITEMS(INDEX + 1, 0) = XPOS
+    SCENEITEMS(INDEX + 1, 1) = YPOS
+    SCENEITEMS(INDEX + 1, 2) = ZPOS
+    SCENEITEMS(INDEX + 1, 3) = FRAME
+    SCENEITEMS(INDEX + 1, 4) = 0
+    SCENEITEMS(INDEX + 1, 5) = 1
+    SCENEITEMS(INDEX + 1, 6) = (SCENEITEMS(INDEX + 1, 6) + 1) MOD 64
+END SUB
+
+'***************************************
+'ANIMATE A TOXIC ROOM
+'***************************************
+SUB ANIMATETOXICROOM
+    IF ROOMCHANGING THEN
+        EXIT SUB
+    END IF
+
+    ADD TOXICEFFECTSTART, 0.3
+
+    IF TOXICEFFECTSTART > 20 THEN
+        TOXICEFFECTSTART = 0
+
+        HASMASK = 0
+        CALL WALLETCONTAINS(8, HASMASK)
+
+        'IS GAS MASK IN THE WALLET?
+        IF HASMASK = 0 THEN
+            'TAKE ADVANTAGE OF EFFECT TIMER TO REMOVE LIFE TO PLAYER
+            ADD PLAYERLIFE, -15
+
+            TRACK 2, 1
+        END IF
+
+        'PREVENT LIFE COUNT TO BE OUT OF BOUNDS
+        IF PLAYERLIFE < 0 THEN
+            PLAYERLIFE = 0
+        END IF
+    END IF
+END SUB
+
+'***************************************
+'ANIMATE A LASER ROOM
+'***************************************
+SUB ANIMATELASERROOM
+    IF ROOMCHANGING THEN
+        EXIT SUB
+    END IF
+
+    BG 0
+    PAL 5
+
+    HX = 20
+    HY = 65
+    VX = 15
+    VY = 65
+
+    'CALCULATE NEXT LASER POSITION
+    IF LASEREFFECTTIME < 50 THEN
+        ADD HX,  INT((LASEREFFECTTIME * 40) / 50)
+        ADD HY,  INT((LASEREFFECTTIME * 23) / 50)
+        ADD VX,  INT((LASEREFFECTTIME * 40) / 50)
+        ADD VY, -INT((LASEREFFECTTIME * 23) / 50)
+    ELSE
+        ADD HX,   40 + INT(((50 - LASEREFFECTTIME) * 40) / 50)
+        ADD HY,   23 + INT(((50 - LASEREFFECTTIME) * 23) / 50)
+        ADD VX,   40 + INT(((50 - LASEREFFECTTIME) * 40) / 50)
+        ADD VY, -(23 + INT(((50 - LASEREFFECTTIME) * 23) / 50))
+    END IF
+
+    IF LASEREFFECTTIME = 0 OR LASEREFFECTTIME = 50 THEN
+        TRACK 12, 2
+    END IF
+
+    'DRAW THE LASERS
+    FOR I = 0 TO 3
+        FOR J = 0 TO 3
+            HIDX = 21 + (I * 4) + J
+            VIDX = 37 + (I * 4) + J
+            SPRITE HIDX PAL 5 FLIP 0, 0
+            SPRITE VIDX PAL 5 FLIP 1, 0
+            SPRITE HIDX, HX + (J * 8) + (I * 16), HY - (I * 8), 96 + J
+            SPRITE VIDX, VX + (J * 8) + (I * 16), VY + (I * 8), 99 - J
+        NEXT J
+    NEXT I
+
+    'PLAYER HIT LASERS?
+    IF SPRITE HIT(18, 21 TO 53) OR SPRITE HIT(20, 21 TO 53) THEN
+        IF CHEAT < 5 THEN
+            DEC PLAYERLIFE
+        END IF
+
+        TRACK 2, 1
+    END IF
+
+    INC LASEREFFECTTIME
+
+    'ANIMATE LASER COLOR
+    IF (LASEREFFECTTIME MOD 20) = 15 THEN
+        PALETTES(5, 1) = 53
+        PALETTES(5, 2) = 32
+        PALETTES(5, 3) = 16
+    ELSE IF (LASEREFFECTTIME MOD 20) = 0 THEN
+        PALETTES(5, 1) = 58
+        PALETTES(5, 2) = 53
+        PALETTES(5, 3) = 32
+    END IF
+
+    PALETTE 5, , PALETTES(5, 1), PALETTES(5, 2), PALETTES(5, 3)
+
+    IF LASEREFFECTTIME = 100 THEN
+        LASEREFFECTTIME = 0
+    END IF
+END SUB
+
+'***************************************
+'CHECK IF CHARACTER POSITION IS VALID
+'X - CHARACTER X POSITION
+'Y - CHARACTER Y POSITION
+'Z - CHARACTER Z POSITION
+'SKIP - ITEM INDEX TO SKIP IN THE SCENE OBJECT COLLISION, IGNORED IF -1
+'ALL - IF 1, ALL ITEMS WILL BE TESTED EVEN IF A COLLISION WAS FOUND
+'HITROBOT[OUT] - HIT ROBOT COUNT IF ALL = 1,
+'                1 IF FIRST HIT IS ROBOT AND ALL = 0
+'HITSCENE[OUT] - HIT SCENE ITEM COUNT IF ALL = 1,
+'                1 IF FIRST HIT IS SCENE ITEM AND ALL = 0
+'HITLIMIT[OUT] - HIT SCENE LIMIT COUNT IF ALL = 1,
+'                1 IF FIRST HIT IS SCENE LIMIT AND ALL = 0
+'HITOBJ[OUT]   - FIRST HIT SCENE ITEM INDEX WHICH CONTAINS THE OBJECT,
+'                -1 IF NO OBJECT WAS HIT
+'R[OUT] - RESULT, IF 1 POS IS VALID, OTHERWISE 0
+'***************************************
+SUB CHECKPOS(X,Y,Z, SKIP, ALL, HITROBOT,HITSCENE,HITLIMIT,HITOBJ, R)
+    HITROBOT =  0
+    HITSCENE =  0
+    HITLIMIT =  0
+    HITOBJ   = -1
+    R        =  0
+
+    'IS CHARACTER OUT OF PLAYFIELD ON X AXIS?
+    IF X <= ORIGIN(0) - RADIUS OR X >= ORIGIN(0) + RADIUS THEN
+        INC HITLIMIT
+
+        IF ALL = 0 THEN
+            EXIT SUB
+        END IF
+    END IF
+
+    'IS CHARACTER OUT OF PLAYFIELD ON Y AXIS?
+    IF Y <= ORIGIN(1) - RADIUS OR Y >= ORIGIN(1) + RADIUS THEN
+        INC HITLIMIT
+
+        IF ALL = 0 THEN
+            EXIT SUB
+        END IF
+    END IF
+
+    'TEST COLLISIONS WITH EACH SCENE OBJECTS
+    FOR I = 1 TO UBOUND(SCENEITEMS) - 1
+        'SHOULD SKIP THIS ITEM?
+        IF I <> SKIP THEN
+            'IS OBJECT VISIBLE?
+            IF SCENEITEMS(I, 5) = 1 THEN
+                SPRIDX = SCENEITEMS(I, 3)
+                BBIDX  = COLLECTION(SPRIDX, 7)
+                MIX    = SCENEITEMS(I, 0) + BBOX(BBIDX, 0)
+                MIY    = SCENEITEMS(I, 1) + BBOX(BBIDX, 1)
+                MIZ    = SCENEITEMS(I, 2) + BBOX(BBIDX, 2)
+                MAXX   = SCENEITEMS(I, 0) + BBOX(BBIDX, 3)
+                MAY    = SCENEITEMS(I, 1) + BBOX(BBIDX, 4)
+                MAZ    = SCENEITEMS(I, 2) + BBOX(BBIDX, 5)
+                RES    = 0
+
+                'TEST COLLISION BETWEEN OBJECT AND CHARACTER
+                CALL INSIDEBOX(X,Y,Z, MIX,MIY,MIZ, MAXX,MAY,MAZ, RES)
+
+                'FOUND A COLLISION?
+                IF RES = 1 THEN
+                    'GET THE ITEM TYPE
+                    ITEMTYPE = SCENEITEMS(I, 3)
+
+                    'IS ITEM A ROBOT?
+                    IF ITEMTYPE >= 4 AND ITEMTYPE <= 7 THEN
+                        INC HITROBOT
+                    ELSE
+                        INC HITSCENE
+                    END IF
+
+                    'IS ITEM A TERMINAL?
+                    IF ITEMTYPE >= 17 AND ITEMTYPE <= 18 THEN
+                        HITOBJ = I
+                    END IF
+
+                    'KEEP FIRST HIT OBJECT INDEX
+                    IF HITOBJ = -1 AND SCENEITEMS(I, 9) >= 0 THEN
+                        HITOBJ = I
+                    END IF
+
+                    'DO TEST ALL COLLISIONS?
+                    IF ALL = 0 THEN
+                        EXIT SUB
+                    END IF
+                END IF
+            END IF
+        END IF
+    NEXT I
+    
+    'NEEDED TO CHECK ALL COLLISION AND FOUND AT LEAST ONE COLLISION?
+    IF HITROBOT = 1 OR HITSCENE = 1 OR HITLIMIT = 1 THEN
+        EXIT SUB
+    END IF
+
+    R = 1
+END SUB
+
+'***************************************
+'CHECK IF POSITION IS INSIDE A DOOR TRIGGER ZONE
+'X - X POSITION
+'Y - Y POSITION
+'Z - Z POSITION
+'INDEX - DOOR INDEX ROR WHICH TRIGGER ZONE SHOULD BE TESTED
+'R[OUT] - RESULT, 1 IF POS IS INSIDE TRIGGER, OTHERWISE 0
+'***************************************
+SUB CHECKDOORTRIGGER(X, Y, Z, INDEX, R)
+    MINX = DOORS(INDEX, 1)
+    MINY = DOORS(INDEX, 2)
+    MINZ = DOORS(INDEX, 3)
+    MAXX = DOORS(INDEX, 4)
+    MAXY = DOORS(INDEX, 5)
+    MAXZ = DOORS(INDEX, 6)
+
+    CALL INSIDEBOX(X, Y, Z, MINX, MINY, MINZ, MAXX, MAXY, MAXZ, R)
+END SUB
+
+'***************************************
+'CHECK IF POSITION IS INSIDE A BOX
+'X - X POSITION
+'Y - Y POSITION
+'Z - Z POSITION
+'MINX - MIN BOX X POSITION
+'MINY - MIN BOX Y POSITION
+'MINZ - MIN BOX Z POSITION
+'MAXX - MAX BOX X POSITION
+'MAXY - MAX BOX Y POSITION
+'MAXZ - MAX BOX Z POSITION
+'R[OUT] - RESULT, 1 IF POS IS INSIDE THE BOX, OTHERWISE 0
+'***************************************
+SUB INSIDEBOX(X, Y, Z, MINX, MINY, MINZ, MAXX, MAXY, MAXZ, R)
+    IF X >= MINX AND Y >= MINY AND Z >= MINZ THEN
+        IF X <= MAXX AND Y <= MAXY AND Z <= MAXZ THEN
+            R = 1
+            EXIT SUB
+        END IF
+    END IF
+
+    R = 0
+END SUB
+
+'***************************************
+'CALLED WHEN A DOOR IS REACHED
+'DOOR - THE REACHED DOOR, WHERE:
+'       1 - TOP DOOR
+'       2 - RIGHT DOOR
+'       3 - BOTTOM DOOR
+'       4 - LEFT DOOR
+'***************************************
+SUB ONPLAYERREACHEDDOOR(DOOR)
+    IF ROOMCHANGING THEN
+        EXIT SUB
+    END IF
+
+    HASACCESS = 0
+
+    PAL 7
+    LOCATE 0, 0
+
+    IF DOOR = 1 AND DOOR <> LASTDOOR THEN
+        CALL CANOPENDOOR(0, HASACCESS)
+        
+        IF HASACCESS THEN
+            NEXTPOSX     = 25.25
+            NEXTPOSY     = 135.25
+            NEXTDIR      = 3
+            LASTDOOR     = 0
+            ROOMCHANGING = 1
+
+            DEC LY
+        ELSE
+            CALL SHOWNEEDCARDMSG(0)
+            LASTDOOR = 1
+        END IF
+    ELSE IF DOOR = 2 AND DOOR <> LASTDOOR THEN
+        CALL CANOPENDOOR(1, HASACCESS)
+        
+        IF HASACCESS THEN
+            NEXTPOSX     = 55.25
+            NEXTPOSY     = 105.25
+            NEXTDIR      = 1
+            LASTDOOR     = 0
+            ROOMCHANGING = 1
+
+            INC LX
+        ELSE
+            CALL SHOWNEEDCARDMSG(1)
+            LASTDOOR = 2
+        END IF
+    ELSE IF DOOR = 3 AND DOOR <> LASTDOOR THEN
+        CALL CANOPENDOOR(2, HASACCESS)
+        
+        IF HASACCESS THEN
+            NEXTPOSX     = 25.25
+            NEXTPOSY     = 75.25
+            NEXTDIR      = 2
+            LASTDOOR     = 0
+            ROOMCHANGING = 1
+
+            INC LY
+        ELSE
+            CALL SHOWNEEDCARDMSG(2)
+            LASTDOOR = 3
+        END IF
+    ELSE IF DOOR = 4 AND DOOR <> LASTDOOR THEN
+        CALL CANOPENDOOR(3, HASACCESS)
+        
+        IF HASACCESS THEN
+            NEXTPOSX     = -4.75
+            NEXTPOSY     =  105.25
+            NEXTDIR      =  0
+            LASTDOOR     =  0
+            ROOMCHANGING =  1
+
+            DEC LX
+        ELSE
+            CALL SHOWNEEDCARDMSG(3)
+            LASTDOOR = 4
+        END IF
+    END IF
+
+    'LAST DOOR REACHED?
+    IF LY = 5 THEN
+        HASCLOCK = 0
+        CALL WALLETCONTAINS(9, HASCLOCK)
+
+        'CAN'T GO OUT IF NOT FOUND THE CLOCK
+        IF HASCLOCK = 0 THEN
+            LY = 4
+
+            IF SHOWLOOPMSG = 0 THEN
+                IF LNG$ = "EN" THEN
+                    CALL ADDMSG("IS IT THE SAME ROOM IN A LOOP?")
+                ELSE IF LNG$ = "FR" THEN
+                    CALL ADDMSG("C'EST LA MEME PIECE EN BOUCLE?")
+                ELSE IF LNG$ = "PT" THEN
+                    CALL ADDMSG("E A MESMA SALA EM UM LOOP?")
+                END IF
+
+                SHOWLOOPMSG = 1
+            END IF
+        END IF
+    END IF
+END SUB
+
+'***************************************
+'CALLED WHEN A TERMINAL WAS HIT
+'***************************************
+SUB ONHITTERMINAL
+    HASBLUEPENDRIVE = 0
+    CALL WALLETCONTAINS(4, HASBLUEPENDRIVE)
+
+    IF HASBLUEPENDRIVE THEN
+        IF LNG$ = "EN" THEN
+            CALL ADDMSG("SECURITY SYSTEM LEVEL 1: DISABLED")
+        ELSE IF LNG$ = "FR" THEN
+            CALL ADDMSG("SYSTEME DE SECURITE NIVEAU 1: DESACTIVE")
+        ELSE IF LNG$ = "PT" THEN
+            CALL ADDMSG("SISTEMA DE SEGURIDADE NIVEL 1: DESATIVADO")
+        END IF
+
+        CRYSTALSTATE(0) = 0
+        CALL REMOVEOBJFROMWALLET(4)
+        EXIT SUB
+    END IF
+
+    HASGRAYPENDRIVE = 0
+    CALL WALLETCONTAINS(7, HASGRAYPENDRIVE)
+
+    IF HASGRAYPENDRIVE THEN
+        IF LNG$ = "EN" THEN
+            CALL ADDMSG("SECURITY SYSTEM LEVEL 2: DISABLED")
+        ELSE IF LNG$ = "FR" THEN
+            CALL ADDMSG("SYSTEME DE SECURITE NIVEAU 2: DESACTIVE")
+        ELSE IF LNG$ = "PT" THEN
+            CALL ADDMSG("SISTEMA DE SEGURIDADE NIVEL 2: DESATIVADO")
+        END IF
+
+        CRYSTALSTATE(1) = 0
+        CALL REMOVEOBJFROMWALLET(7)
+        EXIT SUB
+    END IF
+
+    HASGREENPENDRIVE = 0
+    CALL WALLETCONTAINS(6, HASGREENPENDRIVE)
+
+    IF HASGREENPENDRIVE THEN
+        IF LNG$ = "EN" THEN
+            CALL ADDMSG("SECURITY SYSTEM LEVEL 3: DISABLED")
+        ELSE IF LNG$ = "FR" THEN
+            CALL ADDMSG("SYSTEME DE SECURITE NIVEAU 3: DESACTIVE")
+        ELSE IF LNG$ = "PT" THEN
+            CALL ADDMSG("SISTEMA DE SEGURIDADE NIVEL 3: DESATIVADO")
+        END IF
+
+        CRYSTALSTATE(2) = 0
+        CALL REMOVEOBJFROMWALLET(6)
+        EXIT SUB
+    END IF
+
+    HASBROWNPENDRIVE = 0
+    CALL WALLETCONTAINS(5, HASBROWNPENDRIVE)
+
+    IF HASBROWNPENDRIVE THEN
+        IF LNG$ = "EN" THEN
+            CALL ADDMSG("SECURITY SYSTEM LEVEL 4: DISABLED")
+        ELSE IF LNG$ = "FR" THEN
+            CALL ADDMSG("SYSTEME DE SECURITE NIVEAU 4: DESACTIVE")
+        ELSE IF LNG$ = "PT" THEN
+            CALL ADDMSG("SISTEMA DE SEGURIDADE NIVEL 4: DESATIVADO")
+        END IF
+
+        CRYSTALSTATE(3) = 0
+        CALL REMOVEOBJFROMWALLET(5)
+        EXIT SUB
+    END IF
+
+    IF LNG$ = "EN" THEN
+        CALL ADDMSG("A TERMINAL! IF I HAD A PENDRIVE...")
+    ELSE IF LNG$ = "FR" THEN
+        CALL ADDMSG("UN TERMINAL! SI J'AVAIS UNE CLE USB...")
+    ELSE IF LNG$ = "PT" THEN
+        CALL ADDMSG("UM TERMINAL! SE EU TIVESSE UM PENDRIVE...")
+    END IF
+END SUB
+
+'***************************************
+'DRAW THE MENU TEXT
+'***************************************
+SUB DRAWMENUTEXT
+    PAL 4
+
+    TXTPOSX = 0
+   
+    IF LNG$ = "EN" THEN
+        TEXT 0, 5, "PRESS A TO START,   "
+        TEXT 0, 6, "B TO CHANGE OPTIONS "
+        TXTPOSX = 6
+    ELSE IF LNG$ = "FR" THEN
+        TEXT 0, 5, "BOUTON A POUR JOUER,"
+        TEXT 0, 6, "B POUR MODIF OPTIONS"
+        TXTPOSX = 7
+    ELSE IF LNG$ = "PT" THEN
+        TEXT 0, 5, "BOTAO A PARA JOGAR, "
+        TEXT 0, 6, "B PARA TROCAR OPCOES"
+        TXTPOSX = 6
+    END IF
+
+    PAL 5
+    TEXT TXTPOSX, 5, "A"
+    TEXT 0, 6, "B"
+
+    IF LNG$ = "PT" THEN
+        TEXT 0, 8, "OPCOES: "
+    ELSE
+        TEXT 0, 8, "OPTIONS:"
+    END IF
+
+    PAL 7
+    IF LNG$ = "EN" THEN
+        TEXT 1, 9,  "DIAG. CTRLS:"
+        TEXT 1, 10, "QUICK TEXTS:"
+        TEXT 1, 11, "LANGUAGE:   "
+    ELSE IF LNG$ = "FR" THEN
+        TEXT 1, 9,  "DEPL. DIAG.:"
+        TEXT 1, 10, "DEF. RAPIDE:"
+        TEXT 1, 11, "LANGUE:     "
+    ELSE IF LNG$ = "PT" THEN
+        TEXT 1, 9,  "USO DIAGS:  "
+        TEXT 1, 10, "ROL. RAPIDA:"
+        TEXT 1, 11, "IDIOMA:     "
+    END IF
+
+    PAL 6
+    IF USEDIAGS = 1 THEN
+        TEXT 14, 9, YES$
+    ELSE
+        TEXT 14, 9, NO$
+    END IF
+
+    IF QUICKTEXT = 1 THEN
+        TEXT 14, 10, YES$
+    ELSE
+        TEXT 14, 10, NO$
+    END IF
+
+    TEXT 14, 11, LNG$
+
+    PAL 5
+    IF LNG$ = "EN" THEN
+        TEXT 0, 13, "CODE, GFX & MUSIC:  "
+    ELSE IF LNG$ = "FR" THEN
+        TEXT 0, 13, "CODE, GFX & MUSIQUE:"
+    ELSE IF LNG$ = "PT" THEN
+        TEXT 0, 13, "CODIGO, GFX, MUSICA:"
+    END IF
+
+    PAL 7
+    TEXT 1, 14, "JEAN-MILOST REYMOND"
+END SUB
+
+'***************************************
+'DRAW THE INTERFACE
+'***************************************
+SUB DRAWINTERFACE
+    PAL 6
+    BG 1
+
+    'DRAW THE HEART SYMBOL
+    IF LIFEFRAME >= 50 THEN
+        CELL 17, 11, 123
+    ELSE
+        CELL 17, 11, 122
+    END IF
+
+    'CALCULATE NEXT HEART FRAME
+    LIFEFRAME = (LIFEFRAME + 1) MOD 60
+
+    'CLEAR THE PREVIOUS LIFE TEXT
+    LOCATE 15, 12
+    PRINT "   "
+
+    'CALCULATE THE LIFE TEXT POSITION
+    IF (PLAYERLIFE = 100) THEN
+        LOCATE 15, 12
+    ELSE IF (PLAYERLIFE >= 10) THEN
+        LOCATE 16, 12
+    ELSE
+        LOCATE 17, 12
+    END IF
+
+    'DRAW THE LIFE TEXT
+    PAL 3
+    PRINT PLAYERLIFE
+
+    PAL 1
+    BG 1
+
+    'DRAW THE WALLET ICON
+    CELL 2, 11, 124
+
+    XPOS            = 2
+    WALLETITEMCOUNT = 0
+
+    'DRAW THE WALLET CONTENT
+    FOR I = 0 TO UBOUND(WALLET) - 1
+        IF WALLET(I) > 0 THEN
+            'DRAW THE WALLET ITEM
+            IF WALLET(I) = 1 THEN
+                PAL 6
+                CELL XPOS, 12, 127
+            ELSE IF WALLET(I) = 2 THEN
+                PAL 6
+                CELL XPOS, 12, 126
+            ELSE IF WALLET(I) = 3 THEN
+                PAL 2
+                CELL XPOS, 12, 126
+            ELSE IF WALLET(I) = 4 THEN
+                PAL 2
+                CELL XPOS, 12, 119
+            ELSE IF WALLET(I) = 5 THEN
+                PAL 5
+                CELL XPOS, 12, 118
+            ELSE IF WALLET(I) = 6 THEN
+                PAL 6
+                CELL XPOS, 12, 118
+            ELSE IF WALLET(I) = 7 THEN
+                PAL 3
+                CELL XPOS, 12, 118
+            ELSE IF WALLET(I) = 8 THEN
+                PAL 6
+                CELL XPOS, 12, 115
+            ELSE IF WALLET(I) = 9 THEN
+                PAL 5
+                CELL XPOS, 12, 114
+            END IF
+
+            INC XPOS
+            INC WALLETITEMCOUNT
+        END IF
+    NEXT I
+
+    PAL 3
+
+    'FILL REMAINING WALLET LOCATIONS WITH EMPTY SLOTS
+    FOR I = WALLETITEMCOUNT TO UBOUND(WALLET) - 1
+        CELL XPOS, 12, 125
+        INC XPOS
+    NEXT I
+END SUB
+
+'***************************************
+'DRAW THE SCENE PART WHICH WILL NEVER
+'CHANGE DURING THE SCENE LIFETIME
+'***************************************
+SUB DRAWSTATICSCENE
+    BG 0
+    PAL 0
+
+    'DRAW THE SCENE (FROM BACKGROUND DESIGNER)
+    BG COPY 0, 0, 20, 14 TO 0, 0
+
+    'DRAW THE DOORS
+    CALL DRAWLEFTDOOR
+    CALL DRAWTOPDOOR
+    CALL DRAWRIGHTDOOR
+    CALL DRAWBOTTOMDOOR
+END SUB
+
+'***************************************
+'DRAW THE SCENE PART WHICH WILL CHANGE
+'DYNAMICALLY
+'***************************************
+SUB DRAWSCENE
+    DIM DRAWITEMS(ITEMCOUNT, 5)
+
+    ENTITYCOUNT = 0
+
+    'RASTERIZE THE SCENE ITEMS TO DRAW
+    FOR I = 0 TO UBOUND(SCENEITEMS) - 1
+        IF SCENEITEMS(I, 5) = 1 THEN
+            X = SCENEITEMS(I, 0)
+            Y = SCENEITEMS(I, 1)
+            Z = SCENEITEMS(I, 2)
+            CALL PROJECTISO(X, Y, Z, DRAWITEMS(I, 0), DRAWITEMS(I, 1))
+            DRAWITEMS(I, 2) = SCENEITEMS(I, 4)
+            DRAWITEMS(I, 3) = SCENEITEMS(I, 3)
+            INC ENTITYCOUNT
+        END IF
+    NEXT I
+
+    DIM SORTEDITEMS(ITEMCOUNT)
+
+    'SORT THE ITEMS BY Z ORDER
+    CALL SORT(DRAWITEMS(), SORTEDITEMS())
+
+    SLOT = 18
+
+    'DRAW THE ITEMS IN THE SCENE
+    FOR I = 0 TO ENTITYCOUNT - 1
+        X      = DRAWITEMS(SORTEDITEMS(I), 0)
+        Y      = DRAWITEMS(SORTEDITEMS(I), 1)
+        MIRROR = DRAWITEMS(SORTEDITEMS(I), 2)
+        INDEX  = DRAWITEMS(SORTEDITEMS(I), 3)
+        CALL DRAWSPRITE(X, Y, MIRROR, INDEX, SLOT)
+    NEXT I
+END SUB
+
+'***************************************
+'DRAW A SPRITE FROM THE COLLECTION
+'X - SPRITE X POSITION IN PIXELS
+'Y - SPRITE Y POSITION IN PIXELS
+'MIRROR - IF 1, THE SPRITE WILL BE MIRRORED ON X AXIS
+'INDEX - THE SPRITE INDEX TO DRAW IN THE COLLECTION
+'SLOT[IN, OUT] - THE NEXT AVAILABLE SPRITE SLOT (I.E SPRITE INDEX)
+'NOTE THE POSITION IS BASED ON THE X CENTER AND Y BOTTOM
+'***************************************
+SUB DRAWSPRITE(X, Y, MIRROR, INDEX, SLOT)
+    'CALCULATE THE CENTER X AND TOP Y POSITION
+    CX = X - 4
+    TY = Y - COLLECTION(INDEX, 6)
+
+    'DRAW THE TOP SPRITE
+    IF COLLECTION(INDEX, 0) <> 0 THEN
+        SPRITE SLOT PAL COLLECTION(INDEX, 3) FLIP MIRROR, 0
+        SPRITE SLOT, CX, TY, COLLECTION(INDEX, 0)
+        INC SLOT
+    END IF
+
+    'DRAW THE MASK SPRITE
+    IF COLLECTION(INDEX, 1) <> 0 THEN
+        SPRITE SLOT PAL COLLECTION(INDEX, 4) FLIP MIRROR, 0
+        SPRITE SLOT, CX, TY, COLLECTION(INDEX, 1)
+        INC SLOT
+    END IF
+
+    'DRAW THE BOTTOM SPRITE
+    IF COLLECTION(INDEX, 2) <> 0 THEN
+        SPRITE SLOT PAL COLLECTION(INDEX, 5) FLIP MIRROR, 0
+        SPRITE SLOT, CX, Y, COLLECTION(INDEX, 2)
+        INC SLOT
+    END IF
+END SUB
+
+'***************************************
+'DRAW THE TOP DOOR
+'***************************************
+SUB DRAWTOPDOOR
+    IF DOORS(0, 0) = 0 THEN
+        EXIT SUB
+    END IF
+
+    DIM DOORITEMS(7, 3)
+    CALL FILLDOORITEM(5, 7, 17, DOORITEMS(), 0)
+    CALL FILLDOORITEM(5, 6, 18, DOORITEMS(), 1)
+    CALL FILLDOORITEM(5, 5, 19, DOORITEMS(), 2)
+    CALL FILLDOORITEM(5, 4, 20, DOORITEMS(), 3)
+    CALL FILLDOORITEM(6, 4, 21, DOORITEMS(), 4)
+    CALL FILLDOORITEM(6, 5, 22, DOORITEMS(), 5)
+    CALL FILLDOORITEM(6, 6, 23, DOORITEMS(), 6)
+
+    CALL DRAWBACKDOOR(DOORITEMS(), DOORS(0, 7))
+END SUB
+
+'***************************************
+'DRAW THE RIGHT DOOR
+'***************************************
+SUB DRAWRIGHTDOOR
+    IF DOORS(1, 0) = 0 THEN
+        EXIT SUB
+    END IF
+
+    DIM DOORITEMS(7, 3)
+    CALL FILLDOORITEM(13, 6, 24, DOORITEMS(), 0)
+    CALL FILLDOORITEM(13, 5, 25, DOORITEMS(), 1)
+    CALL FILLDOORITEM(13, 4, 26, DOORITEMS(), 2)
+    CALL FILLDOORITEM(14, 4, 27, DOORITEMS(), 3)
+    CALL FILLDOORITEM(14, 5, 28, DOORITEMS(), 4)
+    CALL FILLDOORITEM(14, 6, 29, DOORITEMS(), 5)
+    CALL FILLDOORITEM(14, 7, 30, DOORITEMS(), 6)
+
+    CALL DRAWBACKDOOR(DOORITEMS(), DOORS(1, 7))
+END SUB
+
+'***************************************
+'DRAW THE BOTTOM DOOR
+'***************************************
+SUB DRAWBOTTOMDOOR
+    IF DOORS(2, 0) = 0 THEN
+        EXIT SUB
+    END IF
+
+    DIM DOORITEMS(7, 3)
+    CALL FILLDOORITEM(13, 11, 17, DOORITEMS(), 0)
+    CALL FILLDOORITEM(13, 10, 18, DOORITEMS(), 1)
+    CALL FILLDOORITEM(13, 9,  19, DOORITEMS(), 2)
+    CALL FILLDOORITEM(13, 8,  20, DOORITEMS(), 3)
+    CALL FILLDOORITEM(14, 8,  21, DOORITEMS(), 4)
+    CALL FILLDOORITEM(14, 9,  22, DOORITEMS(), 5)
+    CALL FILLDOORITEM(14, 10, 23, DOORITEMS(), 6)
+
+    CALL DRAWFRONTDOOR(4, DOORITEMS(), DOORS(2, 7))
+END SUB
+
+'***************************************
+'DRAW THE LEFT DOOR
+'***************************************
+SUB DRAWLEFTDOOR
+    IF DOORS(3, 0) = 0 THEN
+        EXIT SUB
+    END IF
+
+    DIM DOORITEMS(7, 3)
+    CALL FILLDOORITEM(5, 10, 24, DOORITEMS(), 0)
+    CALL FILLDOORITEM(5, 9,  25, DOORITEMS(), 1)
+    CALL FILLDOORITEM(5, 8,  26, DOORITEMS(), 2)
+    CALL FILLDOORITEM(6, 8,  27, DOORITEMS(), 3)
+    CALL FILLDOORITEM(6, 9,  28, DOORITEMS(), 4)
+    CALL FILLDOORITEM(6, 10, 29, DOORITEMS(), 5)
+    CALL FILLDOORITEM(6, 11, 30, DOORITEMS(), 6)
+
+    CALL DRAWFRONTDOOR(11, DOORITEMS(), DOORS(3, 7))
+END SUB
+
+'***************************************
+'FILL A DOOR ITEM
+'X - ITEM X POSITION
+'Y - ITEM Y POSITION
+'C - ITEM CHAR INDEX
+'ITEMS() - ITEM LIST CONTAINING ITEM TO FILL
+'INDEX - ITEM INDEX TO FILL
+'***************************************
+SUB FILLDOORITEM(X, Y, C, ITEMS(), INDEX)
+    ITEMS(INDEX, 0) = X
+    ITEMS(INDEX, 1) = Y
+    ITEMS(INDEX, 2) = C
+END SUB
+
+'***************************************
+'DRAW A BACK DOOR
+'ITEMS() - LIST OF DOOR ITEMS TO DRAW
+'LOCKLEVEL - DOOR LOCK LEVEL, 0=NOT LOCKED, 1=RED, 2=GREEN, 3=BLUE
+'***************************************
+SUB DRAWBACKDOOR(ITEMS(), LOCKLEVEL)
+    COLORS = 3
+    DELTA  = 0
+
+    'APPLY LOCK LEVEL STYLE
+    IF LOCKLEVEL = 1 THEN
+        COLORS = 6
+        DELTA  = 14
+    ELSE IF LOCKLEVEL = 2 THEN
+        COLORS = 6
+        DELTA  = 28
+    ELSE IF LOCKLEVEL = 3 THEN
+        COLORS = 2
+        DELTA  = 28
+    END IF
+
+    BG 1
+    PAL COLORS
+
+    FOR I = 0 TO UBOUND(ITEMS) - 1
+        CH = ITEMS(I, 2) + DELTA
+        CELL ITEMS(I, 0), ITEMS(I, 1), CH
+    NEXT I
+END SUB
+
+'***************************************
+'DRAW A FRONT DOOR
+'INDEX - FIRST SPRITE INDEX TO USE
+'ITEMS() - LIST OF DOOR ITEMS TO DRAW
+'LOCKLEVEL - DOOR LOCK LEVEL, 0=NOT LOCKED, 1=RED, 2=GREEN, 3=BLUE
+'***************************************
+SUB DRAWFRONTDOOR(INDEX, ITEMS(), LOCKLEVEL)
+    COLORS = 3
+    DELTA  = 0
+
+    'APPLY LOCK LEVEL STYLE
+    IF LOCKLEVEL = 1 THEN
+        COLORS = 6
+        DELTA  = 14
+    ELSE IF LOCKLEVEL = 2 THEN
+        COLORS = 6
+        DELTA  = 28
+    ELSE IF LOCKLEVEL = 3 THEN
+        COLORS = 2
+        DELTA  = 28
+    END IF
+
+    FOR I = 0 TO UBOUND(ITEMS) - 1
+        CH = ITEMS(I, 2) + DELTA
+
+        SPRITE I + INDEX PAL COLORS
+        SPRITE I + INDEX, ITEMS(I, 0) * 8, ITEMS(I, 1) * 8, CH
+    NEXT I
+END SUB
+
+'***************************************
+'SORT THE ITEMS TO DRAW BY Z ORDER
+'ENTITIES - SCENE ITEM ENTITIES TO SORT
+'RESULT[OUT] - SORTED ITEMS
+'***************************************
+SUB SORT(ENTITIES(), RESULT())
+    DIM BUCKETS(62, ITEMCOUNT + 1)
+
+    'ITERATE THROUGH SCENE ITEMS
+    FOR I = 0 TO UBOUND(SCENEITEMS) - 1
+        'IS ITEM VISIBLE IN SCENE?
+        IF SCENEITEMS(I, 5) = 1 THEN
+            'CALCULATE THE DISTANCE FROM CAMERA
+            DISTANCE = INT(ENTITIES(I, 1)) - 35
+
+            'IS DISTANCE OUT OF BOUNDS?
+            IF DISTANCE < 62 THEN
+                'SET ITEM IN BUCKET ARRAY
+                INC BUCKETS(DISTANCE, 0)
+                BUCKETS(DISTANCE, BUCKETS(DISTANCE, 0)) = I
+            END IF
+        END IF
+    NEXT I
+
+    POS = 0
+
+    'ITERATE THROUGH BUCKETS AND SORT THEM BY DISTANCE IN RESULT
+    FOR I = UBOUND(BUCKETS) - 1 TO 0 STEP -1
+        FOR J = 0 TO BUCKETS(I, 0) - 1
+            RESULT(POS) = BUCKETS(I, J + 1)
+            INC POS
+        NEXT J
+    NEXT I
+END SUB
+
+'***************************************
+'CALCULATE THE NEARNESS OBJECT VALUE
+'INDEX - OBJECT INDEX TO CALCULATE
+'VALUE[OUT] - NEARNESS VALUE
+'***************************************
+SUB NEARNESS(INDEX, VALUE)
+    VALUE =    SCENEITEMS(INDEX, 0)
+    ADD VALUE, SCENEITEMS(INDEX, 1)
+    ADD VALUE, SCENEITEMS(INDEX, 2)
+END SUB
+
+'***************************************
+'CALCULATE WHICH OBJECT IS CLOSER THE POINT OR VIEW
+'LEFTINDEX - LEFT OBJECT INDEX TO COMPARE
+'RIGHTINDEX - RIGHT INDEX TO COMPARE WITH
+'RESULT[OUT] - THE INDEX OF THE CLOSER OBJECT
+'***************************************
+SUB CLOSER(LEFTINDEX, RIGHTINDEX, RESULT)
+    IF NEARNESS(LEFTINDEX) > NEARNESS(RIGHTINDEX) THEN
+        RESULT = LEFTINDEX
+    ELSE
+        RESULT = RIGHTINDEX
+    END IF
+END SUB
+
+'***************************************
+'PROJECT 3D ISO COORDS TO 2D COORDS
+'X - 3D ISO X POSITION
+'Y - 3D ISO Y POSITION
+'Z - 3D ISO Z POSITION
+'XP[OUT] - PROJECTED 2D X POSITION
+'YP[OUT] - PROJECTED 2D Y POSITION
+'***************************************
+SUB PROJECTISO(X, Y, Z, XP, YP)
+    XP = Y - X
+    YP = (X * 0.5) + (Y * 0.5) - Z
+END SUB
+
+'***************************************
+'MAIN MENU TITLE WOBBLER FUNCTION
+'***************************************
+SUB WOBBLERFUNC
+    EFFECTEND = EFFECTSTART + EFFECTLENGTH
+
+    IF RASTER >= 16 AND RASTER < 32 THEN
+        IF RASTER >= EFFECTSTART AND RASTER < EFFECTEND THEN
+            X = SIN(((RASTER - EFFECTSTART) * PI) / EFFECTLENGTH) * 5
+            SCROLL 0, X, 0
+        END IF
+    END IF
+END SUB
+
+'***************************************
+'SCROLL TEXT RASTER FUNCTION
+'***************************************
+SUB SCROLLTEXTRASTERFUNC
+    IF TOXICROOM = 1 AND RASTER < 112 THEN
+        FX = RASTER + TOXICEFFECTSTART
+        X  = SIN(((FX MOD 10) * (PI * 2.0)) / 10.0) * 2
+        SCROLL 0, X, 0
+    ELSE IF RASTER >= 112 AND RASTER < 120 THEN
+        'SCROLL THE MESSAGE AREA
+        SCROLL 0, MSGX, 0
+    ELSE
+        SCROLL 0, 0, 0
+    END IF
+END SUB
+
+'BOUNDING BOX DATA, USED TO FILL THE BBOX ARRAY, ORGANIZED AS FOLLOW:
+'MIN X, MIN Y, MIN Z, MAX X, MAX Y, MAX Z
+BBOXDATA:
+    DATA -4.0, -4.0, -16.0, 4.0, 4.0, 0.0
+    DATA -2.0, -4.0, -16.0, 6.0, 4.0, 0.0
+    DATA -6.0, -4.0, -16.0, 2.0, 4.0, 0.0
+    DATA -4.0, -2.0, -16.0, 4.0, 6.0, 0.0
+    DATA -4.0, -6.0, -16.0, 4.0, 2.0, 0.0
+
+'SPRITE COLLECTION DATA, TO FILL COLLECTION ARRAY, ORGANIZED AS FOLLOW:
+'TOP, MASK, AND BOTTOM CHAR INDEX, TOP, MASK, AND BOTTOM PALETTE INDEX,
+'Y DELTA BETWEEN TOP AND BOTTOM CHARS, BBOX ITEM (IN BBOX COLLECTION)
+COLLECTIONDATA:
+    DATA 64,  65, 66,  1, 2, 2, 8, 0, 64,  65, 67,  1, 2, 2, 8, 0
+    DATA 68,  69, 70,  1, 2, 2, 8, 0, 68,  69, 71,  1, 2, 2, 8, 0
+    DATA 72,  0,  73,  4, 0, 4, 8, 0, 72,  0,  74,  4, 0, 4, 8, 0
+    DATA 75,  0,  76,  4, 0, 4, 8, 0, 75,  0,  77,  4, 0, 4, 8, 0
+    DATA 129, 0,  128, 6, 0, 5, 5, 0, 130, 0,  131, 5, 0, 5, 8, 2
+    DATA 132, 0,  133, 5, 0, 5, 8, 1, 134, 0,  135, 5, 0, 5, 8, 3
+    DATA 136, 0,  137, 5, 0, 5, 8, 4, 142, 0,  143, 5, 0, 5, 8, 2
+    DATA 144, 0,  145, 5, 0, 5, 8, 1, 138, 0,  139, 5, 0, 5, 8, 3
+    DATA 140, 0,  141, 5, 0, 5, 8, 4, 146, 0,  147, 2, 0, 2, 8, 0
+    DATA 148, 0,  149, 2, 0, 2, 8, 0, 150, 0,  151, 5, 0, 5, 8, 2
+    DATA 152, 0,  153, 5, 0, 5, 8, 1, 154, 0,  155, 5, 0, 5, 8, 3
+    DATA 156, 0,  157, 5, 0, 5, 8, 4, 158, 0,  159, 5, 0, 5, 8, 2
+    DATA 160, 0,  161, 5, 0, 5, 8, 1, 162, 0,  163, 5, 0, 5, 8, 3
+    DATA 164, 0,  165, 5, 0, 5, 8, 4, 166, 0,  167, 4, 0, 4, 8, 2
+    DATA 168, 0,  169, 4, 0, 4, 8, 1, 170, 0,  171, 4, 0, 4, 8, 3
+    DATA 172, 0,  173, 4, 0, 4, 8, 4, 174, 0,  175, 2, 0, 2, 8, 0
+    DATA 176, 0,  177, 2, 0, 2, 8, 0, 78,  0,  79,  4, 0, 4, 8, 0
+    DATA 80,  0,  81,  2, 0, 2, 8, 0, 82,  0,  83,  4, 0, 4, 8, 0
+    DATA 84,  0,  85,  2, 0, 2, 8, 0, 0,   0, 122,  0, 0, 6, 0, 1
+    DATA 0,   0, 123,  0, 0, 6, 0, 1, 0,   0, 119,  0, 0, 2, 0, 1
+    DATA 0,   0, 127,  0, 0, 6, 0, 1, 0,   0, 126,  0, 0, 6, 0, 1
+    DATA 0,   0, 126,  0, 0, 2, 0, 1, 0,   0, 118,  0, 0, 5, 0, 1
+    DATA 0,   0, 118,  0, 0, 6, 0, 1, 0,   0, 118,  0, 0, 3, 0, 1
+    DATA 0,   0, 116,  0, 0, 5, 0, 1, 0,   0, 117,  0, 0, 5, 0, 1
+    DATA 78,  0,  79,  4, 0, 4, 8, 0, 80,  0,  81,  2, 0, 2, 8, 0
+    DATA 0,   0, 115,  0, 0, 6, 0, 1, 0,   0, 114,  0, 0, 5, 0, 1
+
+'DOOR DATA, USED TO FILL THE DOORS COLLECTION, ORGANIZED AS FOLLOW:
+'TRIGGER MIN X, Y, Z, TRIGGER MAX X, Y, Z
+DOORDATA:
+    DATA  17.75, 75.25,  -24.0,  32.75, 76.25,  0.0
+    DATA -4.75,  97.25,  -24.0, -3.75,  112.75, 0.0
+    DATA  17.75, 134.25, -24.0,  33.55, 135.25, 0.0
+    DATA  54.25, 97.75,  -24.0,  55.25, 114.25, 0.0
+
+'LEVELS DATA, ORGANIZED AS FOLLOW:
+'[OPTIONAL] SPECIAL ROOM: 98 = TOXIC ROOM, 99 = LASER ROOM
+'ITEM COUNT (MAX 15)
+'ITEM: X, Y, Z, SPRITE INDEX OR ALIAS (WHICH IS INDEX + 100), MIRRORED
+'DOOR: TOP, RIGHT, BOTTOM AND LEFT VISIBILITY, AND TYPE
+'BACKGROUND: FIRST PALETTE COLORS 1, 2 AND 3 RGB COMPONENTS
+
+LEVEL00:
+    DATA 1
+    DATA 25.25, 105.25, 0.0, 33, 1
+    DATA 0, 0, 1, 0, 1, 0, 0, 0
+    DATA 2, 2, 2, 1, 1, 1, 0, 0, 0
+
+LEVEL01:
+    DATA 11
+    DATA 44.25, 92.25,  0.0, 32, 1, 44.25, 99.25,  0.0, 32,  1
+    DATA 44.25, 106.25, 0.0, 32, 1, 44.25, 113.25, 0.0, 32,  1
+    DATA 44.25, 120.25, 0.0, 32, 1, 18.75, 124.25, 0.0, 32,  0
+    DATA 25.75, 124.25, 0.0, 32, 0, 32.75, 123.75, 0.0, 32,  0
+    DATA 39.75, 123.75, 0.0, 32, 0, 25.25, 105.25, 0.0, 4,   1
+    DATA 6.5,   86.5,   0.0, 8,  0
+    DATA 1, 0, 1, 0, 0, 0, 0, 0
+    DATA 2, 2, 2, 1, 1, 1, 0, 0, 0
+
+LEVEL02:
+    DATA 99, 0
+    DATA 0, 0, 1, 0, 1, 0, 0, 0
+    DATA 3, 2, 2, 2, 1, 1, 1, 0, 0
+
+LEVEL03:
+    DATA 14
+    DATA 10.25, 95.25,  0.0, 30, 0, 14.25, 91.25,  0.0, 29,  0
+    DATA 25.25, 95.0,   0.0, 30, 0, 29.25, 91.0,   0.0, 29,  0
+    DATA 42.25, 95.25,  0.0, 30, 0, 46.25, 91.25,  0.0, 29,  0
+    DATA 10.25, 121.25, 0.0, 30, 0, 14.25, 117.25, 0.0, 29,  0
+    DATA 25.25, 121.0,  0.0, 30, 0, 29.25, 117.0,  0.0, 29,  0
+    DATA 42.25, 121.25, 0.0, 30, 0, 46.25, 117.25, 0.0, 29,  0
+    DATA 25.25, 105.0,  0.0, 4,  0, 25.25, 105.0,  0.0, 106, 0
+    DATA 1, 0, 1, 0, 0, 0, 0, 0
+    DATA 3, 2, 2, 2, 1, 1, 1, 0, 0
+
+LEVEL04:
+    DATA 98, 1
+    DATA 45.25, 80.25, 0.0, 102, 0
+    DATA 0, 0, 1, 0, 0, 0, 0, 0
+    DATA 3, 2, 2, 2, 1, 1, 1, 0, 0
+
+LEVEL10:
+    DATA 14
+    DATA 28.25, 78.25,  0.0, 32,  1, 28.25, 85.25,  0.0, 32,  1
+    DATA 28.25, 92.25,  0.0, 32,  1, 28.25, 99.25,  0.0, 32,  1
+    DATA 28.25, 106.25, 0.0, 32,  1, 28.25, 113.25, 0.0, 32,  1
+    DATA 28.25, 120.25, 0.0, 32,  1, 32.75, 123.75, 0.0, 32,  0
+    DATA 39.75, 123.75, 0.0, 32,  0, 46.75, 123.75, 0.0, 32,  0
+    DATA 53.75, 123.75, 0.0, 32,  0, 10.25, 80.25,  0.0, 4,   1
+    DATA 0.25,  134.75, 0.0, 103, 0, 35.25, 80.25,  0.0, 100, 0
+    DATA 0, 0, 0, 0, 1, 0, 1, 0
+    DATA 2, 2, 2, 1, 1, 1, 0, 0, 0
+
+LEVEL11:
+    DATA 98, 0
+    DATA 1, 0, 1, 0, 0, 0, 1, 0
+    DATA 2, 2, 2, 1, 1, 1, 0, 0, 0
+
+LEVEL12:
+    DATA 14
+    DATA 28.25, 78.25,  0.0, 32, 1, 28.25, 85.25,  0.0, 32, 1
+    DATA 28.25, 92.25,  0.0, 32, 1, 28.25, 99.25,  0.0, 32, 1
+    DATA 28.25, 106.25, 0.0, 32, 1, 28.25, 113.25, 0.0, 32, 1
+    DATA 28.25, 120.25, 0.0, 32, 1, 28.25, 127.25, 0.0, 32, 1
+    DATA 32.0,  84.25,  0.0, 28, 0, 36.0,  80.25,  0.0, 27, 0
+    DATA 32.0,  106.75, 0.0, 28, 0, 36.0,  102.75, 0.0, 27, 0
+    DATA 32.0,  129.25, 0.0, 28, 0, 36.0,  125.25, 0.0, 27, 0
+    DATA 0, 0, 1, 1, 0, 0, 1, 0
+    DATA 3, 2, 2, 2, 1, 1, 1, 0, 0
+
+LEVEL13:
+    DATA 1
+    DATA 25.25, 105.25, 0.0, 34, 1
+    DATA 0, 0, 0, 0, 1, 0, 1, 0
+    DATA 3, 2, 2, 2, 1, 1, 1, 0, 0
+
+LEVEL14:
+    DATA 13
+    DATA 15.0,  85.5,   0.0, 32,  0, 23.0,  85.5,   0.0, 32, 0
+    DATA 31.0,  85.5,   0.0, 32,  0, 39.0,  85.5,   0.0, 32, 0
+    DATA 15.0,  125.5,  0.0, 32,  0, 23.0,  125.5,  0.0, 32, 0
+    DATA 31.0,  125.5,  0.0, 32,  0, 39.0,  125.5,  0.0, 32, 0
+    DATA 20.25, 103.25, 0.0, 27,  0, 16.25, 107.25, 0.0, 28, 0
+    DATA 40.25, 103.25, 0.0, 27,  0, 36.25, 107.25, 0.0, 28, 0
+    DATA 27.0,  120.5,  0.0, 108, 0
+    DATA 1, 0, 0, 0, 0, 0, 1, 0
+    DATA 3, 2, 2, 2, 1, 1, 1, 0, 0
+
+LEVEL20:
+    DATA 1
+    DATA 25.25, 105.0, 0.0, 18, 0
+    DATA 0, 0, 1, 0, 1, 0, 0, 0
+    DATA 2, 2, 2, 1, 1, 1, 0, 0, 0
+
+LEVEL21:
+    DATA 14
+    DATA 16.5, 90.5,  0.0, 20, 0, 20.5, 86.5,  0.0, 19, 0
+    DATA 13.0, 100.5, 0.0, 16, 0, 17.0, 96.5,  0.0, 15, 0
+    DATA 2.0,  100.5, 0.0, 12, 0, 6.0,  96.5,  0.0, 11, 0
+    DATA 16.5, 120.5, 0.0, 20, 0, 20.5, 116.5, 0.0, 19, 0
+    DATA 13.0, 130.5, 0.0, 16, 0, 17.0, 126.5, 0.0, 15, 0
+    DATA 2.0,  130.5, 0.0, 12, 0, 6.0,  126.5, 0.0, 11, 0
+    DATA 46.5, 86.5,  0.0, 8,  0, 46.5, 125.5, 0.0, 8,  0
+    DATA 1, 0, 0, 0, 1, 0, 1, 0
+    DATA 2, 2, 2, 1, 1, 1, 0, 0, 0
+
+LEVEL22:
+    DATA 4
+    DATA 6.5, 86.5,  0.0, 8, 0, 46.5, 86.5,  0.0, 8, 0
+    DATA 6.5, 125.5, 0.0, 8, 0, 46.5, 125.5, 0.0, 8, 0
+    DATA 1, 0, 1, 3, 1, 2, 1, 1
+    DATA 2, 2, 2, 1, 1, 1, 0, 0, 0
+
+LEVEL23:
+    DATA 1
+    DATA 25.25, 105.25, 0.0, 49, 1
+    DATA 1, 2, 0, 0, 1, 0, 0, 0
+    DATA 2, 3, 2, 1, 2, 1, 0, 1, 0
+
+LEVEL24:
+    DATA 14
+    DATA 6.5,   86.5,   0.0, 8,  0, 46.5,  86.5,   0.0, 8,  0
+    DATA 6.5,   125.5,  0.0, 8,  0, 46.5,  125.5,  0.0, 8,  0
+    DATA 6.5,   82.5,   0.0, 32, 0, 46.5,  82.5,   0.0, 32, 0
+    DATA 6.5,   129.5,  0.0, 32, 0, 46.5,  129.5,  0.0, 32, 0
+    DATA 2.5,   86.5,   0.0, 32, 1, 50.5,  86.5,   0.0, 32, 1
+    DATA 2.5,   125.5,  0.0, 32, 1, 50.5,  125.5,  0.0, 32, 1
+    DATA 23.25, 107.25, 0.0, 22, 0, 27.25, 103.25, 0.0, 21, 0
+    DATA 1, 0, 0, 0, 1, 0, 0, 0
+    DATA 2, 3, 2, 1, 2, 1, 0, 1, 0
+
+LEVEL30:
+    DATA 13
+    DATA 10.25, 95.25,  0.0, 30, 0, 14.25, 91.25,  0.0, 29, 0
+    DATA 25.25, 95.0,   0.0, 30, 0, 29.25, 91.0,   0.0, 29, 0
+    DATA 42.25, 95.25,  0.0, 30, 0, 46.25, 91.25,  0.0, 29, 0
+    DATA 10.25, 121.25, 0.0, 30, 0, 14.25, 117.25, 0.0, 29, 0
+    DATA 25.25, 121.0,  0.0, 30, 0, 29.25, 117.0,  0.0, 29, 0
+    DATA 42.25, 121.25, 0.0, 30, 0, 46.25, 117.25, 0.0, 29, 0
+    DATA 25.25, 105.0,  0.0, 4,  0
+    DATA 0, 0, 1, 0, 1, 0, 1, 0
+    DATA 2, 2, 2, 1, 1, 1, 0, 0, 0
+
+LEVEL31:
+    DATA 14
+    DATA 10.25, 95.25,  0.0, 12, 0, 14.25, 91.25,  0.0, 11, 0
+    DATA 25.25, 95.0,   0.0, 12, 0, 29.25, 91.0,   0.0, 11, 0
+    DATA 42.25, 95.25,  0.0, 12, 0, 46.25, 91.25,  0.0, 11, 0
+    DATA 10.25, 116.25, 0.0, 12, 0, 14.25, 112.25, 0.0, 11, 0
+    DATA 25.25, 116.0,  0.0, 12, 0, 29.25, 112.0,  0.0, 11, 0
+    DATA 42.25, 116.25, 0.0, 12, 0, 46.25, 112.25, 0.0, 11, 0
+    DATA 27.0,  130.5,  0.0, 26, 0, 31.0,  126.5,  0.0, 25, 0
+    DATA 1, 0, 1, 0, 0, 0, 0, 0
+    DATA 2, 2, 2, 1, 1, 1, 0, 0, 0
+
+LEVEL32:
+    DATA 12
+    DATA 10.25, 95.25,  0.0, 26, 0, 14.25, 91.25,  0.0, 25, 0
+    DATA 25.25, 95.0,   0.0, 12, 0, 29.25, 91.0,   0.0, 11, 0
+    DATA 42.25, 95.25,  0.0, 26, 0, 46.25, 91.25,  0.0, 25, 0
+    DATA 10.25, 121.25, 0.0, 26, 0, 14.25, 117.25, 0.0, 25, 0
+    DATA 25.25, 121.0,  0.0, 12, 0, 29.25, 117.0,  0.0, 11, 0
+    DATA 42.25, 121.25, 0.0, 26, 0, 46.25, 117.25, 0.0, 25, 0
+    DATA 0, 0, 1, 0, 1, 0, 1, 3
+    DATA 1, 2, 3, 1, 1, 3, 0, 0, 2
+
+LEVEL33:
+    DATA  14
+    DATA  5.25,  105.25, 0.0, 32,  0, 13.25, 105.25, 0.0, 32, 0
+    DATA  21.25, 105.25, 0.0, 32,  0, 29.25, 105.25, 0.0, 32, 0
+    DATA  37.25, 105.25, 0.0, 32,  0, 45.25, 105.25, 0.0, 32, 0
+    DATA -3.25,  105.25, 0.0, 32,  0, 53.25, 105.25, 0.0, 32, 0
+    DATA  26.0,  112.5,  0.0, 22,  0, 30.0,  108.5,  0.0, 21, 0
+    DATA  0.0,   100.0,  0.0, 4,   0, 49.25, 110.0,  0.0, 4,  0
+    DATA  35.25, 80.25,  0.0, 104, 0, 10.25, 135.25, 0.0, 101, 0
+    DATA  1, 0, 0, 0, 1, 0, 0, 0
+    DATA  1, 2, 3, 1, 1, 3, 0, 0, 2
+
+LEVEL34:
+    DATA 1
+    DATA 25.25, 105.25, 0.0, 48, 1
+    DATA 1, 0, 1, 0, 0, 0, 0, 0
+    DATA 1, 2, 3, 1, 1, 3, 0, 0, 2
+
+LEVEL40:
+    DATA 99, 1
+    DATA 0.5, 132.5, 0.0, 107, 0
+    DATA 0, 0, 0, 0, 1, 0, 1, 0
+    DATA 2, 2, 2, 1, 1, 1, 0, 0, 0
+
+LEVEL41:
+    DATA 11
+    DATA  6.5,  86.5,  0.0, 8,  0, 46.5, 86.5,  0.0, 8,  0
+    DATA -1.0,  121.5, 0.0, 32, 0, 7.0,  121.5, 0.0, 32, 0
+    DATA  15.0, 121.5, 0.0, 32, 0, 23.0, 121.5, 0.0, 32, 0
+    DATA  19.0, 128.5, 0.0, 16, 0, 23.0, 124.5, 0.0, 15, 0
+    DATA  1.0,  128.5, 0.0, 12, 0, 5.0,  124.5, 0.0, 11, 0
+    DATA  2.0,  105.0, 0.0, 4,  0
+    DATA 1, 0, 0, 0, 0, 0, 1, 0
+    DATA 2, 2, 2, 1, 1, 1, 0, 0, 0
+
+LEVEL42:
+    DATA 98, 1
+    DATA 25.25, 105.0, 0.0, 4, 0
+    DATA 0, 0, 0, 0, 1, 0, 1, 0
+    DATA 1, 2, 3, 1, 1, 3, 0, 0, 2
+
+LEVEL43:
+    DATA 13
+    DATA 15.0,  85.5,   0.0, 32,  0, 23.0,  85.5,   0.0, 32, 0
+    DATA 31.0,  85.5,   0.0, 32,  0, 39.0,  85.5,   0.0, 32, 0
+    DATA 15.0,  125.5,  0.0, 32,  0, 23.0,  125.5,  0.0, 32, 0
+    DATA 31.0,  125.5,  0.0, 32,  0, 39.0,  125.5,  0.0, 32, 0
+    DATA 20.25, 103.25, 0.0, 27,  0, 16.25, 107.25, 0.0, 28, 0
+    DATA 40.25, 103.25, 0.0, 27,  0, 36.25, 107.25, 0.0, 28, 0
+    DATA 10.0,  80.5,   0.0, 105, 0
+    DATA 1, 0, 0, 0, 1, 0, 0, 0
+    DATA 1, 2, 3, 1, 1, 3, 0, 0, 2
+
+LEVEL44:
+    DATA 14
+    DATA 16.5, 90.5,  0.0, 20, 0, 20.5, 86.5,  0.0, 19, 0
+    DATA 13.0, 100.5, 0.0, 16, 0, 17.0, 96.5,  0.0, 15, 0
+    DATA 2.0,  100.5, 0.0, 12, 0, 6.0,  96.5,  0.0, 11, 0
+    DATA 16.5, 120.5, 0.0, 20, 0, 20.5, 116.5, 0.0, 19, 0
+    DATA 13.0, 130.5, 0.0, 16, 0, 17.0, 126.5, 0.0, 15, 0
+    DATA 2.0,  130.5, 0.0, 12, 0, 6.0,  126.5, 0.0, 11, 0
+    DATA 46.5, 86.5,  0.0, 8,  0, 46.5, 125.5, 0.0, 8,  0
+    DATA 1, 0, 0, 0, 0, 0, 1, 0
+    DATA 1, 2, 3, 1, 1, 3, 0, 0, 2
+
+#1:MAIN PALETTES
+002A1500003906240039061A003F2A15
+002B273100392410000E0930003F2A15
+
+#2:MAIN CHARACTERS
+00000000000000000000000000000000
+00000000030C30C000000000030F3FFF
+00000000C0300C0300000000C0F0FCFF
+00000000030C30C000000000030F3FFF
+030C30C0C0300C03030F3FFFFFFFFFFF
+C0300C030F3CF0C0C0F0FCFFF3CF3FFF
+00000000C0300C0300000000C0F0FCFF
+030C30C0C0300C03030F3FFFFF3F0F03
+C0300C030F3CF0C0C0F0FCFFF3CC30C0
+C0300C0300000000FF3F0F0300000000
+0F3CF0C0C0300C03F3CF3FFFFF3F0F03
+C0300C030F3CF0C0FFFFFFFFF3CC30C0
+0F3CF0C000000000F3CC30C000000000
+C0300C0300000000FF3F0F0300000000
+0F3CF0C000000000F3CC30C000000000
+C0300C030F3CF0C0FFFFFFFFF3CF3FFF
+0F3CF0C0C0300C03F3CF3FFFFFFFFFFF
+A0A0808000000000C0C0C08000000000
+A0A0A0A0A0A0A0A0C0C0C0C0C0C0C0C0
+20A0A0A0A0A0A0A040C0C0C0C0C0C0C0
+0000000000030D34000000000000030C
+00030D3DD54505050000020E36C60606
+05050505050505050606060606060606
+05050505040000000606060604000000
+A0A0A0A0200000006060606020000000
+A0A0A0A0A0A0A0A06060606060606060
+00C0B0BCABA2A0A0000040706C636060
+0000000000C0B02C000000000000C030
+04050505050505050203030303030303
+05050505050505050303030303030303
+05050101000000000303030100000000
+E0E0C08000000000E0E0C08000000000
+E0E0E0E0E0E0E0E0E0E0E0E0E0E0E0E0
+60E0E0E0E0E0E0E060E0E0E0E0E0E0E0
+0000000000030F3C0000000000030F3C
+00030F3FF7C7070700030F3FF7C70707
+07070707070707070707070707070707
+07070707040000000707070704000000
+E0E0E0E020000000E0E0E0E020000000
+E0E0E0E0E0E0E0E0E0E0E0E0E0E0E0E0
+00C0F0FCEFE3E0E000C0F0FCEFE3E0E0
+0000000000C0F03C0000000000C0F03C
+06070707070707070607070707070707
+07070707070707070707070707070707
+07070301000000000707030100000000
+0000000000000000E0E0C08000000000
+0000000000000000E0E0E0E0E0E0E0E0
+000000000000000060E0E0E0E0E0E0E0
+00000000000000000000000000030F3C
+000000000000000000030F3FF7C70707
+00000000000000000707070707070707
+00000000000000000707070704000000
+0000000000000000E0E0E0E020000000
+0000000000000000E0E0E0E0E0E0E0E0
+000000000000000000C0F0FCEFE3E0E0
+00000000000000000000000000C0F03C
+00000000000000000607070707070707
+00000000000000000707070707070707
+00000000000000000707030100000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+1C3E7E5B3E1C00001C26426500623C18
+00000000000042E700000000000042E7
+E7FFFF7F6E6CCC18FFFF7E7C6E0C0000
+E7FFFEFE66666CC0FFFFFC7866600000
+1C3E7E7F3E3F18001C3E7E7F3E7F3E18
+00000000000040E600000000000040E6
+FFFFFF7F6E7C6E0CFFFF7E7C6E6C0C00
+FFFFFEFE66677660FFFFFC7866666000
+00183C7E7C38C07E000000002A041880
+7F7EBE3C35160200988199010120640C
+7F7E7E3D363210009881590100042C60
+00183C7E7C38C07E0000000002041880
+7F7EBE3C35360600A499810101083106
+7F7E7E3D34363000A499410100010E30
+080818183838797A0000040406064727
+7C78383818180808170F060604040000
+000004040606472708081C1C3E3E3E5D
+170F0606040400006B773E3E1C1C0808
+000810281028512A0000040204024522
+5428102810081008150A040204000400
+00000402040245220008142A142A1408
+150A0402040004004122142A14081408
+000000030C101013000000030F1F1F1C
+0030C0000030CC030030F0F0F0C00000
+1C1F17140000000010101C1C00000000
+0000C0F33F0C04040000000000000C0C
+C030F0E0200000000000003030000000
+00000000000000FE00000000000000FE
+03000000000000000300000000000000
+BDEF3D0800000000FFFF3F0C00000000
+004000000000000000C0000000000000
+02062060000000000000000000000000
+000000000000030C000000000000030F
+0000030C33CC33CC0000030F3CF3CF3C
+33CC33CC30C000003CF3CF3CF0C00000
+30C0000000000000F0C0000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+0000057A857E41FE0000057FFA81BF7E
+659E71DC20C000007EE18F3CE0C00000
+00000718679C73AC0000071F78E38F7C
+1DE21EF50AF400001EFDE10BFEF40000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00001C3D3D3A0418001C264B73463C18
+00002400182C3418003C5A7E66100800
+18245ABDBD5A2418183C66C3C3663C18
+0018245A5A24180000183C66663C1800
+00020702069860000000083CFEF86000
+00020F3EF86000000000083CFEF86000
+08142A2A08080008081C362200000808
+00000C02BD020C0000000C06C3060C00
+00367F7F7F3E1C0800367F7F7F3E1C08
+0000143E3E1C08000000143E3E1C0800
+3C24FFFBF1E3F7FF3C24C3850E1C89C3
+0054024002402A000054024002402A00
+000000000000000000000C3E7C300000
+00000C3E7C30000000000C3E7C300000
+0000060E0E0E0C000018667E7E7E3C00
+00101020223214080004040808080800
+0C33C0F0FCCFF3FF0C3FFFBF8FB38D81
+CFF3FFCFF33F0F03B18D81B1CD310D03
+0000C03038C808080000C0F0F8F8F8F8
+08080808080830C0F8F8F8F8F8F8F0C0
+0000030C1C1310100000030F1F1F1F1F
+1010101010100C031F1F1F1F1F1F0F03
+30CC030F3FF3CFFF30FCFFFDF1CDB181
+F3CFFFF3CFFCF0C08DB1818DB38CB0C0
+000000000000030F0000000000000000
+3FFF7F3F080000000000C0B38C840404
+0000000030FCFFFE0000000000000003
+FCF0C000000000000D31C10000000000
+000000000C3FFF7F00000000000000C0
+3F0F030000000000B08C830000000000
+000000000000C0F00000000000000000
+FCFFFEFC10000000000003CD31212020
+00000C122D5DBAB40000000C1E3E7D7B
+C8F0F0F0F0F0F030370F0F0F0F0F0F0C
+00003048B4BA5D2D00000030787CBEDE
+130F0F0F0F0F0F0CECF0F0F0F0F0F030
+000000000C33CC7300000101010C3FCF
+3C0F030000000000B38C830000000000
+6038CCF4F430000060F8FCBCDCF830C0
+CC3FFEFC10000000F0C003CD31212020
+061C332F2F0C0000061F3F3D3B1F0C03
+33FC7F3F080000000F03C0B38C840404
+0000000030CC33CE000080808030FCF3
+3CF0C00000000000CD31C10000000000
+00000000030F3F1F0000000000000030
+0F010101000000002C23232303000000
+0000000000C0F0FC0000000000000000
+FFFCF0C0C00000000003CF7FFDF12020
+0000000000030F3F0000000000000000
+FF3F0F030300000000C0F3FEBF8F0404
+00000000C0F0FCF8000000000000000C
+F08080800000000034C4C4C4C0000000
+0000183E3F1F471100383E7761FBBFEF
+4411040100000000BBEE7B1E07010000
+0000000080E0F8FD00000080E0F8DE87
+7B1B471747170706EFFFBFEFBFEF7F1E
+0000000001071FBF00000001071F7BE1
+DED8E2E8E2E8E060F7FFFDF7FDF7FE78
+0000187CFCF8E288001C7CEE86DFFDF7
+2288208000000000DD77DE78E0800000
+C0B08C8381818181C0B0DCABD5ABD5AB
+81818181C1310D03D5ABD5ABD53B0D03
+030D31C181818181030D3BD5ABD5ABD5
+81818181838CB0C0ABD5ABD5ABDCB0C0
+001F030101010101FF7F1F0303030303
+00FF8000001E1210FFFFFF809EBFB3B0
+00FF000000611111FFFFFF0061731B1B
+00FF000000C72424FFFFFF00C7EF2C2C
+00FF0000000C929EFFFFFF000C9EB3BF
+00FE000000040404FEFFFE00040E0E0E
+004040404040404040E0E0E0E0E0E0E0
+01010101010101000303030303030301
+1010101010000000B0B0B0B0B0A08000
+11719191710000007BFB9B9BFB6A0000
+C704040404000000EFCF0C0C0C080000
+101011120C000000BE3031331E0C0000
+043C24243C0000003E7E66667E3C0000
+4040400000004000E0E0E0400040E040
+
+#3:MAIN BG
+00001410000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000003000400
+05000600000000000000000000000000
+00000000000000000000000000000000
+030004000F0010000F00100005000600
+00000000000000000000002000000000
+00000000030004000F0010000F001000
+0F0010000F0010000500060000000000
+0000002000000000030004000F001000
+0F0010000F0010000F0010000F001000
+0F001000050006000000002000000000
+09000A000F0010000F0010000F001000
+0F0010000F0010000F0010000B000C00
+00000020000000000000000009000A00
+0F0010000F0010000F0010000F001000
+0B000C00000000000000000000000000
+000000000000000009000A000F001000
+0F0010000B000C000000000000000000
+00000000000000000000000000000000
+0000000009000A000B000C0000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000
+
+#15:MAIN SOUND
+2800303A010000002800FB04003A0800
+2F00000F0C72AF003F00900F09FE0F00
+3800600F08FFFE003800505000000000
+0800000F000000000800000F00000000
+0800000F000000000800000F00000000
+2F00F00F1E60F9000F000A8F08F4F000
+2800808F0C0F00002800F00002FF0000
+3800305200F0F0007F0A200008FFCC00
+03080808034040400304404003044040
+03074005030740050304060503040605
+03070605038706050940C0408BC04040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+2BFF00FF000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+2BEF00FF000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+37DF00FF000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+290F00000000300F000000002D0F0000
+0000300F00000000290F00000000300F
+000000002D0F00000000300F00000000
+2D0F00000000280F00000000240F0000
+0000280F000000002D0F000000002F0F
+000000002D0F00000000280F00000000
+391F000000000000000000003C1F0000
+0000000000000000401F000000000000
+00000000431F00000000000000000000
+401F000000000000000000003C1F0000
+0000000000000000391F000000000000
+000000003C1F00000000000000000000
+2B3F000000004F4F000000002B3F004F
+3F004F4F000000002B3F000000004F4F
+000000002B3F004F3F004F4F00000000
+2B3F000000004F4F000000002B3F0000
+00004F4F000000002B3F000000004F4F
+000000002B3F000000004F4F00000000
+41660000000045660000000048660000
+00004566000000004166000000004566
+00000000486600000000456600000000
+4566000000004866000000004C660000
+00004866000000004566000000004866
+000000004C6600000000486600000000
+401F000000000000000000003C1F0000
+0000000000000000391F000000000000
+00000000341F00000000000000000000
+301F00000000000000000000341F0000
+0000000000000000391F000000000000
+00000000341F00000000000000000000
+FF000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+382F0000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+000000FF000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+37CF00FF000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+2ABF0000000000000000000000000000
+0000FF00000000002ABF000000000000
+00000000000000000000FF0000000000
+2ABF0000000000000000000000000000
+0000FF00000000002ABF000000000000
+00000000000000000000FF0000000000
+2BAF0000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+FF000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+
