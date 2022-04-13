@@ -29,7 +29,7 @@ This is a 3d isometric game engine core.
 ### Lighting Works
 A directional light and point light demo. You change between lights by pressing B.
 
-![Lighting Works](Demos/Lighting%20Works/Lighting Works.png)
+![Lighting Works](Demos/Lighting%20Works/Lighting%20Works.png)
 
 ### Stars 3D
 A 3D star field.
