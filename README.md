@@ -22,7 +22,7 @@ A combat scene inspired from the Final Fantasy games (it's also a trubute to the
 ![Final Fantasy Scene Combat](Demos/Final%20Fantasy%20Combat%20Scene/FFCombat.png)
 
 ### Isometric 3d game engine
-This is a 3d isometric game engine core.
+This is an isometric 3d game engine core.
 
 ![Isometric 3D](Demos/Isometric%203D%20Game%20Engine/Isometric3D.png)
 
