@@ -57,3 +57,8 @@ This is a small arcade and puzzle game, containing 12 levels. You're an adventur
 This is a 3d isometric game, in which you're trapped in your office, for an unknown reason, and you try to escape to the traps which appeared here.
 
 ![Trapped!](Games/Trapped/Trapped.png)
+
+### Centipede
+This is a LowResNX port of the Centipede arcade game from 1980.
+
+![Trapped!](Games/Centipede/Centipede.png)

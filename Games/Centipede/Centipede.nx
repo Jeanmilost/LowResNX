@@ -1,0 +1,2179 @@
+'--------------------------------------------
+'CENTIPEDE - COPYRIGHT (C) ATARI - 1981
+'LOWRES NX PORT BY JEAN-MILOST REYMOND
+'--------------------------------------------
+
+GLOBAL LIVES, SCORE, HIGH_SCORE, COLOR_INDEX, TITLE_OFFSET, GAME_MODE,  NEXT_EXTRA_LIVE, EXTRA_LIVE_OFFSET
+
+'SPRITES ARE USED AS FOLLOW:
+'0        = PLAYER
+'1        = LASER
+'2 TO 14  = CENTIPEDE
+'15       = FLY
+'16 TO 17 = SPIDER
+'18 TO 19 = SCORPION
+
+'SCREEN DIMENSION ARRAY, ORGANIZED AS FOLLOW:
+'0 - SCREEN WIDTH IN PIXELS
+'1 - SCREEN HEIGHT IN PIXELS
+DIM GLOBAL SCREEN(2)
+SCREEN(0) = 160
+SCREEN(1) = 128
+
+'PLAYER ARRAY, ORGANIZED AS FOLLOW:
+'0 - PLAYER X POSITION IN PIXELS
+'1 - PLAYER Y POSITION IN PIXELS
+DIM GLOBAL PLAYER(2)
+PLAYER(0) = 76
+PLAYER(1) = 108
+
+'LASER ARRAY, ORGANIZED AS FOLLOW:
+'0 - LASER X POSITION IN PIXELS
+'1 - LASER Y POSITION IN PIXELS
+'2 - IF 1, LASER IS VISIBLE, HIDDEN OTHERWISE
+'3 - LASER SPEED
+DIM GLOBAL LASER(4)
+LASER(0) = 0
+LASER(1) = 0
+LASER(2) = 0
+LASER(3) = 4
+
+'CENTIPEDE ARRAY, ORGANIZED AS FOLLOW:
+'FIRST LEVEL
+'0 TO 11 - CENTIPEDE ITEMS
+'SECOND LEVEL
+'0 - CENTIPEDE ITEM X POSITION IN PIXELS
+'1 - CENTIPEDE ITEM Y POSITION IN PIXELS
+'2 - CENTIPEDE ITEM X OFFSET
+'3 - CENTIPEDE ITEM Y OFFSET
+'4 - IF 5, ITEM IS A BODY ITEM, IF 6, ITEM IS A HEAD ITEM, HIDDEN IF 0
+'5 - MOVING TO NEXT LINE X OFFSET
+'6 - IF 1, CENTIPEDE WAS POISONED
+DIM GLOBAL CENTIPEDE(12, 7)
+
+'CENTIPEDE HEADS HIT TABLE ARRAY, ORGANIZED AS FOLLOW:
+'0 - HEAD INDEX
+'1 - HIT ROW
+DIM GLOBAL HIT_TABLE(12, 14)
+
+'FLY ARRAY, ORGANIZED AS FOLLOW
+'0 - FLY X POSITION IN PIXELS
+'1 - FLY Y POSITION IN PIXELS
+'2 - IF 1, FLY IS VISIBLE, HIDDEN OTHERWISE
+'3 - FLY SPEED
+'4 - FLY EXPLOSION FRAME
+DIM GLOBAL FLY(5)
+FLY(3) = 1
+
+'SPIDER ARRAY, ORGANIZED AS FOLLOW
+'0  - SPIDER X POSITION IN PIXELS
+'1  - SPIDER Y POSITION IN PIXELS
+'2  - IF 1, SPIDER IS VISIBLE, HIDDEN OTHERWISE
+'3  - SPIDER SPEED
+'4  - SPIDER OFFSET X
+'5  - SPIDER OFFSET Y
+'6  - SPIDER EXPLOSION FRAME
+'7  - SPIDER SOUND POSITION
+'8  - SPIDER CHANGE DIR TIME
+'9  - SPIDER INITIAL DIRECTION
+'10 - SPIDER POINT MULTIPLIER
+DIM GLOBAL SPIDER(11)
+SPIDER(3) = 0.75
+
+'SCORPION ARRAY, ORGANIZED AS FOLLOW:
+'0 - SCORPION X POSITION IN PIXELS
+'1 - SCORPION Y POSITION IN PIXELS
+'2 - IF 1, SCORPION IS VISIBLE, HIDDEN OTHERWISE
+'3 - SCORPION SPEED
+'4 - SCORPION EXPLOSION FRAME
+'5 - SCORPION SOUND POSITION
+DIM GLOBAL SCORPION(6)
+SCORPION(3) = 1
+
+DIM GLOBAL FRAME_ARRAY(1)
+FRAME_ARRAY(0) = 0
+
+GAMEPAD 1
+
+RANDOMIZE TIMER
+
+'SAVE THE WHOLE COLOR PALETTE IN RAM
+COPY $FF00, 32 TO $A000
+
+'DEFAULT VALUES
+GAME_MODE         = 1
+EXTRA_LIVE_OFFSET = 10000
+
+'--------------------------------------------
+'MAIN LOOP
+'--------------------------------------------
+DO
+    CALL SHOW_MENU
+
+    LIVES           = 2
+    NEXT_EXTRA_LIVE = EXTRA_LIVE_OFFSET
+    SCORE           = 0
+    HIGH_SCORE      = PEEKL($E000)
+
+    CALL INIT_CENTIPEDE(CENTIPEDE(), HIT_TABLE())
+    CALL DRAW_BG
+
+    RESTORE IN_GAME_COLORS
+
+    LIVELOST    = 0
+    COLOR_INDEX = 0
+
+    CALL CHANGE_COLORS(COLOR_INDEX)
+
+    REPEAT
+        'UPDATE THE HIGH SCORE IF SCORE EXCEEDED IT
+        IF SCORE > HIGH_SCORE THEN
+            HIGH_SCORE = SCORE
+            POKEL $E000, HIGH_SCORE
+        END IF
+
+        'EXTRA LIVE?
+        IF SCORE >= NEXT_EXTRA_LIVE THEN
+            INC LIVES
+            ADD NEXT_EXTRA_LIVE, EXTRA_LIVE_OFFSET
+            TRACK 7, 2
+        END IF
+
+        CALL ANIM_SPRITES(FRAME_ARRAY(0), 16, 4)
+
+        CALL CHECK_CENTIPEDE(CENTIPEDE(), HIT_TABLE())
+
+        CALL MOVE_CENTIPEDE(CENTIPEDE(), HIT_TABLE())
+
+        CALL MOVE_FLY(FLY())
+        CALL MOVE_SPIDER(SPIDER())
+        CALL MOVE_SCORPION(SCORPION())
+
+        CALL MOVE_PLAYER(PLAYER(0), PLAYER(1), LIVELOST)
+        CALL MOVE_LASER(PLAYER(0), PLAYER(1), LASER())
+
+        CALL DRAW_CENTIPEDE(CENTIPEDE())
+
+        CALL DRAW_FLY(FLY())
+        CALL DRAW_SPIDER(SPIDER())
+        CALL DRAW_SCORPION(SCORPION())
+
+        CALL DRAW_PLAYER(PLAYER(0), PLAYER(1))
+        CALL DRAW_LASER(LASER(0), LASER(1), LASER(2))
+
+        CALL DRAW_INTERFACE(SCORE, HIGH_SCORE, LIVES)
+
+        'LOST A LIVE?
+        IF LIVELOST = 1 THEN
+            CALL RUN_DYING_SEQUENCE
+
+            LIVELOST = 0
+        END IF
+
+        WAIT VBL
+    UNTIL LIVES = -1
+LOOP
+
+'--------------------------------------------
+'SHOW THE MAIN MENU
+'--------------------------------------------
+SUB SHOW_MENU
+    'DISABLE ALL SPRITES
+    SPRITE OFF
+
+    'RESTORE THE DEFAULT COLOR PALETTE FROM RAM
+    COPY $A000, 32 TO $FF00
+
+    'COPY THE BACKGROUND LAYER
+    BG 0
+    BG SOURCE ROM(5)
+    BG COPY 0, 0, 20, 16 TO 0, 0
+
+    'SHOW THE PRESS A TO START TEXT
+    PAL 0
+    TEXT 1, 11, "PRESS (A) TO START"
+
+    'COPY THE FOREGROUND LAYER
+    BG 1
+    BG SOURCE ROM(6)
+    BG COPY 0, 0, 20, 16 TO 0, 0
+
+    'ENABLE THE CENTIPEDE ANIMATION RASTER SUBPROGRAM
+    ON RASTER CALL MOVE_CENTIPEDE_TITLE
+
+    TITLE_OFFSET = 0
+
+    BG 0
+    PAL 3
+
+    'ANIMATE THE MENU UNTIL THE A BUTTON IS PRESSED
+    REPEAT
+        TITLE_OFFSET = (TITLE_OFFSET + 3) MOD 360
+
+        'DO ENABLE SPECIAL MODE?
+        IF BUTTON TAP(0, 1) THEN
+            'TOGGLE GAME MODE
+            IF GAME_MODE = 0 THEN
+                GAME_MODE = 1
+            ELSE IF GAME_MODE = 1 THEN
+                GAME_MODE = 2
+            ELSE IF GAME_MODE = 2 THEN
+                GAME_MODE = 3
+            ELSE
+                GAME_MODE = 0
+            END IF
+        END IF
+
+        'DRAW SELECTED GAME MODE
+        IF GAME_MODE = 0 THEN
+            TEXT 4, 10, " ROOKIE (B) "
+        ELSE IF GAME_MODE = 1 THEN
+            TEXT 4, 10, "  EASY (B)  "
+        ELSE IF GAME_MODE = 2 THEN
+            TEXT 4, 10, " NORMAL (B) "
+        ELSE
+            TEXT 4, 10, "  HARD (B)  "
+        END IF
+
+        WAIT VBL
+    UNTIL BUTTON TAP(0, 0)
+
+    'RESET THE RASTER SUBPROGRAM
+    ON RASTER OFF
+
+    'CHANGE THE GAME SPEED
+    IF GAME_MODE = 0 THEN
+        LASER(3)    = 8
+        FLY(3)      = 1
+        SPIDER(3)   = 0.75
+        SCORPION(3) = 1
+    ELSE IF GAME_MODE = 3 THEN
+        LASER(3)    = 4
+        FLY(3)      = 1.5
+        SPIDER(3)   = 1
+        SCORPION(3) = 1.5
+    ELSE
+        LASER(3)    = 4
+        FLY(3)      = 1
+        SPIDER(3)   = 0.75
+        SCORPION(3) = 1
+    END IF
+END SUB
+
+'--------------------------------------------
+'RUN THE DYING SEQUENCE
+'--------------------------------------------
+SUB RUN_DYING_SEQUENCE
+    'STOP ALL THE MUSIC
+    STOP
+
+    DEC LIVES
+
+    'PLAY EXPLOSION SOUND
+    MUSIC 2
+
+    EXPFRM = 0
+
+    'SHOW PLAYER EXPLOSION
+    REPEAT
+        CALL COPY_ANIM(EXPFRM \ 5, 50, 19, 1, 1)
+        SPRITE 0 PAL 2
+        SPRITE 0, PLAYER(0), PLAYER(1), 19
+        INC EXPFRM
+        WAIT VBL
+    UNTIL EXPFRM = 30
+
+    SPRITE OFF 0
+
+    'RESET THE FLY
+    FLY(0) = 0
+    FLY(1) = 0
+    FLY(2) = 0
+
+    SPRITE OFF 15
+
+    'RESET THE SPIDER
+    SPIDER(0) = 0
+    SPIDER(1) = 0
+    SPIDER(2) = 0
+
+    SPRITE OFF 16 TO 17
+
+    'RESET THE SCORPION
+    SCORPION(0) = 0
+    SCORPION(1) = 0
+    SCORPION(2) = 0
+
+    SPRITE OFF 18 TO 19
+
+    'REPAIR THE BACKGROUND AND RESET THE CENTIPEDE
+    CALL REPAIR_BG
+    CALL INIT_CENTIPEDE(CENTIPEDE(), HIT_TABLE())
+END SUB
+
+'--------------------------------------------
+'CLEAR THE HIT TABLE
+'HIT_TABLE - HIT TABLE
+'--------------------------------------------
+SUB CLEAR_HIT_TABLE(HIT_TABLE())
+    FOR I = 0 TO UBOUND(HIT_TABLE) - 1
+        FOR J = 0 TO UBOUND(HIT_TABLE, 1) - 1
+            HIT_TABLE(I, J) = 0
+        NEXT J
+    NEXT I
+END SUB
+
+'--------------------------------------------
+'INITIALIZE THE CENTIPEDE
+'CENTIPEDE - CENTIPEDE ARRAY
+'HIT_TABLE - HIT TABLE
+'--------------------------------------------
+SUB INIT_CENTIPEDE(CENTIPEDE(), HIT_TABLE())
+    'SELECT THE INITIAL DIRECTION (LEFT OR RIGHT)
+    IDIR = RND(2000) MOD 2
+
+    'ITERATE THROUGH CENTIPEDE ITEMS TO INITIALIZE
+    FOR I = 0 TO UBOUND(CENTIPEDE) - 1
+        VELOCITY = 1
+
+        IF GAME_MODE = 0 THEN
+            VELOCITY = 0.25
+        ELSE IF GAME_MODE = 3 THEN
+            VELOCITY = 2
+        END IF
+
+        IF IDIR = 0 THEN
+            CENTIPEDE(I, 0) =  (SCREEN(0) / 2) + 9 - (I * 8)
+            CENTIPEDE(I, 1) = -8
+            CENTIPEDE(I, 2) =  VELOCITY
+            CENTIPEDE(I, 3) =  2
+        ELSE
+            CENTIPEDE(I, 0) =  (SCREEN(0) / 2) - 17 + (I * 8)
+            CENTIPEDE(I, 1) = -8
+            CENTIPEDE(I, 2) = -VELOCITY
+            CENTIPEDE(I, 3) =  2
+        END IF
+
+        'FIRST ITEM IS A HEAD, OTHERS ARE BODIES
+        IF I = 0 THEN CENTIPEDE(I, 4) = 6 ELSE CENTIPEDE(I, 4) = 5
+
+        'MOVING TO NEXT LINE Y OFFSET IS CONSTANT
+        CENTIPEDE(I, 5) = 2
+
+        'RESET THE POISONED STATE
+        CENTIPEDE(I, 6) = 0
+    NEXT I
+
+    CALL CLEAR_HIT_TABLE(HIT_TABLE())
+END SUB
+
+'--------------------------------------------
+'CHECK IF CENTIPEDE IS STILL VISIBLE, RESET IT IF NO
+'CENTIPEDE - CENTIPEDE ARRAY
+'HIT_TABLE - HIT TABLE
+'--------------------------------------------
+SUB CHECK_CENTIPEDE(CENTIPEDE(), HIT_TABLE())
+    FOR I = 0 TO UBOUND(CENTIPEDE) - 1
+        IF CENTIPEDE(I, 4) <> 0 THEN EXIT SUB
+    NEXT I
+
+    CALL INIT_CENTIPEDE(CENTIPEDE(), HIT_TABLE())
+    CALL CHANGE_COLORS(COLOR_INDEX)
+END SUB
+
+'--------------------------------------------
+'PROPAGATE THE HEAD HIT TO FOLLOWING ITEMS
+'CX - HIT POSITION ON X
+'CY - HIT POSITION ON Y
+'IDX - HEAD ITEM INDEX FROM WHICH PROPAGATION WILL START
+'CENTIPEDE - CENTIPEDE ARRAY
+'HIT_TABLE - HIT TABLE ARRAY
+'--------------------------------------------
+SUB PROPAGATE_HIT(CX, CY, IDX, CENTIPEDE(), HIT_TABLE())
+    'ITERATE THROUGH CENTIPEDE ITEMS
+    FOR I = IDX TO UBOUND(CENTIPEDE) - 1
+        'GET ITEM CHARACTER
+        CH = CENTIPEDE(I, 4)
+
+        'DO STOP PROPAGATION? (DO STOP ON EMPTY ITEM OR IF ANOTHER
+        'HEAD WAS FOUND)
+        IF I > IDX AND (CH=0 OR CH=6 OR CH=22 OR CH=38 OR CH=54) THEN
+            EXIT SUB
+        END IF
+
+        'SET THE NEXT ITEM HIT POINT
+        HIT_TABLE(I, CY / 8) = CX
+    NEXT I
+END SUB
+
+'--------------------------------------------
+'PROPAGATE THE POISONED STATE IN A CENTIPEDE SEGMENT
+'IDX - HEAD ITEM INDEX FROM WHICH PROPAGATION WILL START
+'VALUE - POISONED STATE VALUE, IF 1 CENTIPEDE SEGMENT IS POISONED
+'CENTIPEDE - CENTIPEDE ARRAY
+'--------------------------------------------
+SUB PROPAGATE_POISON(IDX, VALUE, CENTIPEDE())
+    'ITERATE THROUGH CENTIPEDE ITEMS
+    FOR I = IDX TO UBOUND(CENTIPEDE) - 1
+        'GET ITEM CHARACTER
+        CH = CENTIPEDE(I, 4)
+
+        'DO STOP PROPAGATION? (DO STOP ON EMPTY ITEM OR IF ANOTHER
+        'HEAD WAS FOUND)
+        IF I > IDX AND (CH=0 OR CH=6 OR CH=22 OR CH=38 OR CH=54) THEN
+            EXIT SUB
+        END IF
+
+        'SET ITEM POISONED STATE
+        CENTIPEDE(I, 6) = VALUE
+    NEXT I
+END SUB
+
+'--------------------------------------------
+'CALCULATE THE SPEED OF EACH CENTIPEDE SEGMENT
+'CENTIPEDE - CENTIPEDE ARRAY
+'--------------------------------------------
+SUB CALCULATE_SPEED(CENTIPEDE())
+    'DON'T EXECUTE IF NOT IN SPECIAL MODE
+    IF GAME_MODE <> 2 THEN EXIT SUB
+
+    'ITERATE THROUGH CENTIPEDE ITEMS
+    FOR I = 0 TO UBOUND(CENTIPEDE) - 1
+        'GET ITEM CHARACTER
+        CH = CENTIPEDE(I, 4)
+
+        'FOUND A HEAD?
+        IF (CH=6 OR CH=22 OR CH=38 OR CH=54) THEN
+            IS_STANDALONE = 0
+
+            'STANDALONE HEAD (I.E WITHOUT FOLLOWING ITEMS)?
+            IF (I + 1) >= UBOUND(CENTIPEDE) THEN
+                IS_STANDALONE = 1
+            ELSE IF CENTIPEDE(I + 1, 4) = 0 THEN
+                IS_STANDALONE = 1
+            END IF
+
+            'STANDALONE HEAD MOVE QUICKER THAN CENTIPEDE SEGMENTS
+            IF IS_STANDALONE = 1 THEN CENTIPEDE(I, 2) = 1.5
+        END IF
+    NEXT I
+END SUB
+
+'--------------------------------------------
+'MOVE THE CENTIPEDE
+'CENTIPEDE - CENTIPEDE ARRAY
+'HIT_TABLE - CENTILEDE HEAD HIT TABLE ARRAY
+'--------------------------------------------
+SUB MOVE_CENTIPEDE(CENTIPEDE(), HIT_TABLE())
+    'REPLAY CENTIPEDE WALKING TRACK IN LOOP
+    IF (TIMER MOD 16) = 0 THEN TRACK 1, 3
+
+    FOR I = 0 TO UBOUND(CENTIPEDE) - 1
+        CALL MOVE_CENTIPEDE_ITEM(I, CENTIPEDE(), HIT_TABLE())
+    NEXT I
+END SUB
+
+'--------------------------------------------
+'MOVE A CENTIPEDE ITEM
+'IDX - ITEM INDEX
+'CENTIPEDE - CENTIPEDE ARRAY
+'HIT_TABLE - CENTILEDE HEAD HIT TABLE ARRAY
+'--------------------------------------------
+SUB MOVE_CENTIPEDE_ITEM(IDX, CENTIPEDE(), HIT_TABLE())
+    'GET THE ITEM CHARACTER
+    CH = CENTIPEDE(IDX, 4)
+
+    'IS CENTIPEDE ITEM HIDDEN?
+    IF CH = 0 THEN
+        EXIT SUB
+    END IF
+
+    'IS ITEM MOVING TO THE NEXT LINE?
+    IF CH = 21 OR CH = 37 OR CH = 53 THEN
+        CALL MOVE_AROUND(IDX, CENTIPEDE(IDX, 5), CENTIPEDE())
+        EXIT SUB
+    ELSE IF CH = 22 OR CH = 38 OR CH = 54 THEN
+        CALL MOVE_AROUND(IDX, CENTIPEDE(IDX, 5), CENTIPEDE())
+        EXIT SUB
+    END IF
+
+    'MOVE TO NEXT X POSITION
+    ADD CENTIPEDE(IDX, 0), CENTIPEDE(IDX, 2)
+
+    'HIT THE SCREEN BOUNDS, IS CENTIPEDE POISONED, OR CENTIPEDE HEAD
+    'ITEM HIT A MUSHROOM?
+    IF CENTIPEDE(IDX, 0) <= 0 THEN
+        'START TO MOVE TO NEXT LINE
+        CENTIPEDE(IDX, 0) = -2
+        ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+
+        'IS CENTIPEDE MOVING TO THE SCREEN TOP?
+        IF CENTIPEDE(IDX, 3) < 0 THEN
+            'START THE MOVING TO LINE UP SEQUENCE
+            IF CENTIPEDE(IDX, 4) = 5 THEN
+                CENTIPEDE(IDX, 4) = 53
+            ELSE
+                CENTIPEDE(IDX, 4) = 54
+            END IF
+        ELSE
+            'START THE MOVING TO LINE DOWN SEQUENCE
+            IF CENTIPEDE(IDX, 4) = 5 THEN
+                CENTIPEDE(IDX, 4) = 21
+            ELSE
+                CENTIPEDE(IDX, 4) = 22
+            END IF
+        END IF
+    ELSE IF CENTIPEDE(IDX, 0) >= SCREEN(0) - 8 THEN
+        'START TO MOVE TO NEXT LINE
+        CENTIPEDE(IDX, 0) = SCREEN(0) - 6
+        ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+
+        'IS CENTIPEDE MOVING TO SCREEN TOP?
+        IF CENTIPEDE(IDX, 3) < 0 THEN
+            'START THE MOVING TO LINE UP SEQUENCE
+            IF CENTIPEDE(IDX, 4) = 5 THEN
+                CENTIPEDE(IDX, 4) = 53
+            ELSE
+                CENTIPEDE(IDX, 4) = 54
+            END IF
+        ELSE
+            'START THE MOVING TO LINE DOWN SEQUENCE
+            IF CENTIPEDE(IDX, 4) = 5 THEN
+                CENTIPEDE(IDX, 4) = 21
+            ELSE
+                CENTIPEDE(IDX, 4) = 22
+            END IF
+        END IF
+    ELSE IF CH = 6 AND CENTIPEDE(IDX, 6) = 1 THEN
+        CX = CENTIPEDE(IDX, 0)
+        CY = CENTIPEDE(IDX, 1)
+        CALL PROPAGATE_HIT(CX, CY, IDX, CENTIPEDE(), HIT_TABLE())
+
+        'START TO MOVE TO NEXT LINE
+        ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+
+        'START THE MOVING TO LINE DOWN SEQUENCE
+        CENTIPEDE(IDX, 4) = 22
+    ELSE
+        'GET THE CENTIPEDE ITEM POSITION
+        CX     = CENTIPEDE(IDX, 0)
+        CY     = CENTIPEDE(IDX, 1)
+        RESULT = 0
+
+        'ITEM FIRST MOVE OR HEAD ITEM ALREADY COLLIDED SOMETHING?
+        IF CY < 0 THEN
+            'GET CENTIPEDE X OFFSET
+            OX = CENTIPEDE(IDX, 2)
+
+            'HIT THE FIRST MOVE MOVING DOWN POINT?
+            IF OX > 0 AND CX = (SCREEN(0) / 2) + 9 + OX THEN
+                'START TO MOVE TO NEXT LINE
+                ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+
+                'START THE MOVING TO LINE DOWN SEQUENCE
+                IF CENTIPEDE(IDX, 4) = 5 THEN
+                    CENTIPEDE(IDX, 4) = 21
+                ELSE
+                    CENTIPEDE(IDX, 4) = 22
+                END IF
+            ELSE IF OX < 0 AND CX = (SCREEN(0) / 2) - 17 + OX THEN
+                'START TO MOVE TO NEXT LINE
+                ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+
+                'START THE MOVING TO LINE DOWN SEQUENCE
+                IF CENTIPEDE(IDX, 4) = 5 THEN
+                    CENTIPEDE(IDX, 4) = 21
+                ELSE
+                    CENTIPEDE(IDX, 4) = 22
+                END IF
+            END IF
+        ELSE IF HIT_TABLE(IDX, CY / 8) = CX THEN
+            RESULT = 1
+        ELSE
+            'CHECK FOR MUSHROOM COLLISION
+            CALL COLLIDE(CX, CY, RESULT)
+        END IF
+
+        'FOUND A COLLISION?
+        IF RESULT THEN
+            'IS A HEAD ITEM?
+            IF CENTIPEDE(IDX, 4) = 6 THEN
+                'MEMORIZE THE HEAD COLLISION LOCATION, THUS EACH ITEM
+                'WILL FOLLOW THE HEAD. PROPAGATE UNTIL THE NEXT HEAD, 
+                'OR UNTIL THE CENTIPEDE LAST ITEM IS REACHED
+                CALL PROPAGATE_HIT(CX,CY,IDX,CENTIPEDE(),HIT_TABLE())
+
+                'GET THE HIT MUSHROOM PALETTE, THE CENTIPEDE Y OFFSET,
+                'AND THE CURRENT ITEM POISONED STATE
+                CA = CELL.A(CX \ 8, CY \ 8) AND 7
+                OY = CENTIPEDE(IDX, 3)
+                PS = CENTIPEDE(IDX, 6)
+
+                'IN CASE A POISONED MUSHROOM WAS HIT, AND IF THE
+                'CENTIPEDE IS MOVING DOWN, PROPAGATE THE POISONED
+                'STATE IN THE WHOLE CENTIPEDE SEGMENT
+                IF CA = 3 AND OY > 0 AND PS = 0 THEN
+                    CALL PROPAGATE_POISON(IDX, 1, CENTIPEDE())
+                END IF
+            END IF
+
+            'RESET THE COLLISION FOR THIS ITEM
+            HIT_TABLE(IDX, CY / 8) = 0
+
+            'START TO MOVE TO NEXT LINE
+            ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+
+            'IS CENTIPEDE MOVING TO SCREEN TOP?
+            IF CENTIPEDE(IDX, 3) < 0 THEN
+                'START THE MOVING TO LINE UP SEQUENCE
+                IF CENTIPEDE(IDX, 4) = 5 THEN
+                    CENTIPEDE(IDX, 4) = 53
+                ELSE
+                    CENTIPEDE(IDX, 4) = 54
+                END IF
+            ELSE
+                'START THE MOVING TO LINE DOWN SEQUENCE
+                IF CENTIPEDE(IDX, 4) = 5 THEN
+                    CENTIPEDE(IDX, 4) = 21
+                ELSE
+                    CENTIPEDE(IDX, 4) = 22
+                END IF
+            END IF
+        END IF
+    END IF
+
+    'IF CENTIPEDE REACHED THE SCREEN TOP OR BOTTOM, INVERT Y OFFSET
+    IF CENTIPEDE(IDX, 3) > 0 AND CENTIPEDE(IDX, 1) >= 104 THEN
+        CENTIPEDE(IDX, 3) = -CENTIPEDE(IDX, 3)
+
+        'REMOVE ITS POISONED STATE, IF ANY
+        CENTIPEDE(IDX, 6) = 0
+
+        'CLEAR THE HIT TABLE FOR THIS ITEM
+        FOR I = 0 TO UBOUND(HIT_TABLE, 1) - 1
+            HIT_TABLE(IDX, I) = 0
+        NEXT I
+    ELSE IF CENTIPEDE(IDX, 3) < 0 AND CENTIPEDE(IDX, 1) <= 0 THEN
+        CENTIPEDE(IDX, 3) = -CENTIPEDE(IDX, 3)
+    END IF
+END SUB
+
+'--------------------------------------------
+'MOVE THE CENTIPEDE ITEM AROUND HIT POINT
+'IDX - ITEM INDEX
+'OFFSETX - OFFSET X
+'CENTIPEDE - CENTIPEDE ARRAY
+'--------------------------------------------
+SUB MOVE_AROUND(IDX, OFFSETX, CENTIPEDE())
+    'IS CENTIPEDE MOVING TO SCREEN TOP?
+    IF CENTIPEDE(IDX, 3) < 0 THEN
+        'IS CENTIPEDE MOVING TO THE LEFT?
+        IF CENTIPEDE(IDX, 2) < 0 THEN
+            'CENTIPEDE IS MOVING TO TOP LEFT, UPDATE ITEM FRAME AND POS
+            IF CENTIPEDE(IDX, 4) = 53 THEN
+                ADD CENTIPEDE(IDX, 0), -OFFSETX
+                ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+                CENTIPEDE(IDX, 4) = 37
+            ELSE IF CENTIPEDE(IDX, 4) = 37 THEN
+                ADD CENTIPEDE(IDX, 0), OFFSETX
+                ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+                CENTIPEDE(IDX, 4) = 21
+            ELSE IF CENTIPEDE(IDX, 4) = 21 THEN
+                ADD CENTIPEDE(IDX, 0), OFFSETX
+                ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+                CENTIPEDE(IDX, 4) = 5
+                CENTIPEDE(IDX, 2) = -CENTIPEDE(IDX, 2)
+            ELSE IF CENTIPEDE(IDX, 4) = 54 THEN
+                ADD CENTIPEDE(IDX, 0), -OFFSETX
+                ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+                CENTIPEDE(IDX, 4) = 38
+            ELSE IF CENTIPEDE(IDX, 4) = 38 THEN
+                ADD CENTIPEDE(IDX, 0), OFFSETX
+                ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+                CENTIPEDE(IDX, 4) = 22
+            ELSE IF CENTIPEDE(IDX, 4) = 22 THEN
+                ADD CENTIPEDE(IDX, 0), OFFSETX
+                ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+                CENTIPEDE(IDX, 4) = 6
+                CENTIPEDE(IDX, 2) = -CENTIPEDE(IDX, 2)
+            END IF
+
+            EXIT SUB
+        END IF
+
+        'CENTIPEDE IS MOVING TO TOP RIGHT, UPDATE ITEM FRAME AND POS
+        IF CENTIPEDE(IDX, 4) = 53 THEN
+            ADD CENTIPEDE(IDX, 0), OFFSETX
+            ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+            CENTIPEDE(IDX, 4) = 37
+        ELSE IF CENTIPEDE(IDX, 4) = 37 THEN
+            ADD CENTIPEDE(IDX, 0), -OFFSETX
+            ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+            CENTIPEDE(IDX, 4) = 21
+        ELSE IF CENTIPEDE(IDX, 4) = 21 THEN
+            ADD CENTIPEDE(IDX, 0), -OFFSETX
+            ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+            CENTIPEDE(IDX, 4) = 5
+            CENTIPEDE(IDX, 2) = -CENTIPEDE(IDX, 2)
+        ELSE IF CENTIPEDE(IDX, 4) = 54 THEN
+            ADD CENTIPEDE(IDX, 0), OFFSETX
+            ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+            CENTIPEDE(IDX, 4) = 38
+        ELSE IF CENTIPEDE(IDX, 4) = 38 THEN
+            ADD CENTIPEDE(IDX, 0), -OFFSETX
+            ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+            CENTIPEDE(IDX, 4) = 22
+        ELSE IF CENTIPEDE(IDX, 4) = 22 THEN
+            ADD CENTIPEDE(IDX, 0), -OFFSETX
+            ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+            CENTIPEDE(IDX, 4) = 6
+            CENTIPEDE(IDX, 2) = -CENTIPEDE(IDX, 2)
+        END IF
+
+        EXIT SUB
+    END IF
+
+    'IS CENTIPEDE MOVING TO THE LEFT?
+    IF CENTIPEDE(IDX, 2) < 0 THEN
+        'CENTIPEDE IS MOVING TO BOTTOM LEFT, UPDATE ITEM FRAME AND POS
+        IF CENTIPEDE(IDX, 4) = 21 THEN
+            ADD CENTIPEDE(IDX, 0), -OFFSETX
+            ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+            CENTIPEDE(IDX, 4) = 37
+        ELSE IF CENTIPEDE(IDX, 4) = 37 THEN
+            ADD CENTIPEDE(IDX, 0), OFFSETX
+            ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+            CENTIPEDE(IDX, 4) = 53
+        ELSE IF CENTIPEDE(IDX, 4) = 53 THEN
+            ADD CENTIPEDE(IDX, 0), OFFSETX
+            ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+            CENTIPEDE(IDX, 4) = 5
+            CENTIPEDE(IDX, 2) = -CENTIPEDE(IDX, 2)
+        ELSE IF CENTIPEDE(IDX, 4) = 22 THEN
+            ADD CENTIPEDE(IDX, 0), -OFFSETX
+            ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+            CENTIPEDE(IDX, 4) = 38
+        ELSE IF CENTIPEDE(IDX, 4) = 38 THEN
+            ADD CENTIPEDE(IDX, 0), OFFSETX
+            ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+            CENTIPEDE(IDX, 4) = 54
+        ELSE IF CENTIPEDE(IDX, 4) = 54 THEN
+            ADD CENTIPEDE(IDX, 0), OFFSETX
+            ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+            CENTIPEDE(IDX, 4) = 6
+            CENTIPEDE(IDX, 2) = -CENTIPEDE(IDX, 2)
+        END IF
+
+        EXIT SUB
+    END IF
+
+    'CENTIPEDE IS MOVING TO BOTTOM RIGHT, UPDATE ITEM FRAME AND POS
+    IF CENTIPEDE(IDX, 4) = 21 THEN
+        ADD CENTIPEDE(IDX, 0), OFFSETX
+        ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+        CENTIPEDE(IDX, 4) = 37
+    ELSE IF CENTIPEDE(IDX, 4) = 37 THEN
+        ADD CENTIPEDE(IDX, 0), -OFFSETX
+        ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+        CENTIPEDE(IDX, 4) = 53
+    ELSE IF CENTIPEDE(IDX, 4) = 53 THEN
+        ADD CENTIPEDE(IDX, 0), -OFFSETX
+        ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+        CENTIPEDE(IDX, 4) = 5
+        CENTIPEDE(IDX, 2) = -CENTIPEDE(IDX, 2)
+    ELSE IF CENTIPEDE(IDX, 4) = 22 THEN
+        ADD CENTIPEDE(IDX, 0), OFFSETX
+        ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+        CENTIPEDE(IDX, 4) = 38
+    ELSE IF CENTIPEDE(IDX, 4) = 38 THEN
+        ADD CENTIPEDE(IDX, 0), -OFFSETX
+        ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+        CENTIPEDE(IDX, 4) = 54
+    ELSE IF CENTIPEDE(IDX, 4) = 54 THEN
+        ADD CENTIPEDE(IDX, 0), -OFFSETX
+        ADD CENTIPEDE(IDX, 1), CENTIPEDE(IDX, 3)
+        CENTIPEDE(IDX, 4) = 6
+        CENTIPEDE(IDX, 2) = -CENTIPEDE(IDX, 2)
+    END IF
+END SUB
+
+'--------------------------------------------
+'MOVE THE PLAYER SPRITE
+'X[IN, OUT] - SPRITE X POS IN PIXELS, NEW SPRITE X POS ON FUNCTION ENDS
+'Y[IN, OUT] - SPRITE Y POS IN PIXELS, NEW SPRITE Y POS ON FUNCTION ENDS
+'LIVELOST[OUT] - IF 1, PLAYER HIT SOMETHING AND A LIVE SHOULD BE LOST
+'--------------------------------------------
+SUB MOVE_PLAYER(X, Y, LIVELOST)
+    'MOVE THE SPRITE LEFT OR RIGHT
+    IF LEFT(0)  THEN DEC X
+    IF RIGHT(0) THEN INC X
+
+    'LIMIT THE SPRITE X POSITION TO THE SCREEN BOUNDS
+    IF X > 152 THEN X = 152 ELSE IF X < 0 THEN X = 0
+
+    'MOVE THE SPRITE UP OR DOWN
+    IF UP(0)   THEN DEC Y
+    IF DOWN(0) THEN INC Y
+
+    'LIMIT THE SPRITE Y POSITION TO THE PLAYFIELD BOUNDS
+    IF Y > 108 THEN Y = 108 ELSE IF Y < 64 THEN Y = 64
+
+    'PLAYER HIT THE CENTIPEDE?
+    IF SPRITE HIT (0, 2 TO 14) THEN
+        LIVELOST = 1
+        EXIT SUB
+    END IF
+
+    'PLAYER HIT THE FLY?
+    IF SPRITE HIT (0, 15) AND FLY(2) <> 2 THEN
+        LIVELOST = 1
+        EXIT SUB
+    END IF
+
+    'PLAYER HIT THE SPIDER?
+    IF SPRITE HIT (0, 16 TO 17) AND SPIDER(2) <> 2 THEN
+        LIVELOST = 1
+        EXIT SUB
+    END IF
+END SUB
+
+'--------------------------------------------
+'MOVE THE LASER
+'PX - PLAYER X POSITION
+'PY - PLAYER Y POSITION
+'LASER()[IN, OUT] - LASER DATA ARRAY
+'--------------------------------------------
+SUB MOVE_LASER(CX, CY, LASER())
+    'DO FIRE THE LASER?
+    IF LASER(2) = 0 AND BUTTON TAP(0, 0) THEN
+        'FIRE IT
+        TRACK 0, 0
+        LASER(0) = CX
+        LASER(1) = CY - 8
+        LASER(2) = 1
+    END IF
+
+    'WAS LASER FIRED?
+    IF LASER(2) = 0 THEN EXIT SUB
+
+    'MOVE THE LASER UP
+    ADD LASER(1), -LASER(3)
+
+    'LIMIT REACHED?
+    IF LASER(1) <= -8 THEN LASER(2) = 0
+
+    COL    = 0
+    DELTAX = 3
+
+    'DETECT COLLISION AGAINST THE BACKGROUND
+    CALL COLLIDE(LASER(0) + DELTAX, LASER(1), COL)
+
+    'HIT SOMETHING IN THE BACKGROUND?
+    IF COL THEN
+        'KEEP THE SAME PALETTE AS BEFORE
+        PAL (CELL.A((LASER(0) + DELTAX) \ 8, LASER(1) \ 8) AND 7)
+
+        'GET CELL CONTENT
+        CELLCONTENT = CELL.C((LASER(0) + DELTAX) \ 8, LASER(1) \ 8)
+
+        'INCREASE BREAK STATE OR REMOVE THE HIT CELL
+        IF CELLCONTENT = 2 THEN
+            CELL (LASER(0) + DELTAX) \ 8, LASER(1) \ 8, 18
+        ELSE IF CELLCONTENT = 18 THEN
+            CELL (LASER(0) + DELTAX) \ 8, LASER(1) \ 8, 34
+        ELSE IF CELLCONTENT = 34 THEN
+            CELL (LASER(0) + DELTAX) \ 8, LASER(1) \ 8, 50
+        ELSE IF CELLCONTENT = 50 THEN
+            CELL (LASER(0) + DELTAX) \ 8, LASER(1) \ 8, 0
+        END IF
+
+        'INCREASE THE SCORE
+        INC SCORE
+
+        'DISABLE THE LASER
+        LASER(2) = 0
+    END IF
+
+    'HIT A CENTIPEDE ITEM?
+    FOR I = 0 TO UBOUND(CENTIPEDE) - 1
+        IF SPRITE HIT (1, I + 2) THEN
+            BGX = CENTIPEDE(I, 0) \ 8
+            BGY = CENTIPEDE(I, 1) \ 8
+            ICH = CENTIPEDE(I, 4)
+
+            'INCREASE THE SCORE
+            IF ICH = 6 OR ICH = 22 OR ICH = 38 OR ICH = 54 THEN
+                ADD SCORE, 100
+            ELSE
+                ADD SCORE, 10
+            END IF
+
+            'DISABLE THE CENTIPEDE ITEM
+            CENTIPEDE(I, 4) = 0
+
+            PAL 0
+
+            'PUT A MUSHROOM WHERE THE ITEM WAS HIT
+            CELL BGX, BGY, 2
+
+            'IF AN ITEM FOLLOWS, MAKE IT A HEAD
+            IF I + 1 < UBOUND(CENTIPEDE) THEN
+                CH = CENTIPEDE(I + 1, 4)
+
+                IF CH = 5 OR CH = 21 OR CH = 37 OR CH = 53 THEN
+                    CENTIPEDE(I + 1, 4) = CH + 1
+                END IF
+            END IF
+
+            'RECALCULATE EACH CENTIPEDE SEGMENT SPEED
+            CALL CALCULATE_SPEED(CENTIPEDE())
+
+            'DISABLE THE LASER
+            LASER(2) = 0
+        END IF
+    NEXT I
+
+    'HIT A FLY?
+    IF SPRITE HIT(1, 15) AND FLY(2) <> 2 THEN
+        'SET FLY IN EXPLOSION MODE
+        FLY(2) = 2
+
+        'DISABLE THE LASER
+        LASER(2) = 0
+
+        'STOP THE FLY SOUND
+        STOP 2
+
+        'INCREASE THE SCORE
+        ADD SCORE, 200
+
+        'START EXPLOSION SOUND
+        TRACK 2, 2
+    END IF
+
+    'HIT A SPIDER?
+    IF SPRITE HIT(1, 16 TO 17) AND SPIDER(2) <> 2 THEN
+        'SET SPIDER IN EXPLOSION MODE
+        SPIDER(2) = 2
+
+        'DISABLE THE LASER
+        LASER(2) = 0
+
+        'STOP THE SPIDER SOUND
+        STOP 1
+
+        'CALCULATE SPIDER MOVE AREA HEIGHT
+        SPIDERDELTA = (110 - 56) \ 3
+
+        'CALCULATE THE SCORE
+        IF SPIDER(1) < 56 + SPIDERDELTA THEN
+            SPIDER(10) = 1
+            ADD SCORE, 300
+        ELSE IF SPIDER(1) < 56 + (SPIDERDELTA * 2) THEN
+            SPIDER(10) = 2
+            ADD SCORE, 600
+        ELSE 
+            SPIDER(10) = 3
+            ADD SCORE, 900
+        END IF
+
+        'START EXPLOSION SOUND
+        TRACK 2, 1
+    END IF
+
+    'HIT A SCORPION?
+    IF SPRITE HIT(1, 18 TO 19) AND SCORPION(2) <> 2 THEN
+        'SET SCORPION IN EXPLOSION MODE
+        SCORPION(2) = 2
+
+        'DISABLE THE LASER
+        LASER(2) = 0
+
+        'STOP THE SCORPION SOUND
+        STOP 1
+
+        'INCREASE THE SCORE
+        ADD SCORE, 1000
+
+        'START EXPLOSION SOUND
+        TRACK 2, 1
+    END IF
+END SUB
+
+'--------------------------------------------
+'MOVE THE FLY
+'FLY - FLY ARRAY
+'--------------------------------------------
+SUB MOVE_FLY(FLY())
+    'IS FLY EXPLODING?
+    IF FLY(2) = 2 THEN EXIT SUB
+
+    'NO FLY VISIBLE?
+    IF FLY(2) = 0 THEN
+        'GENERATE ONE RANDOMLY
+        IF RND(1000) = 497 THEN
+            FLY(0) = RND(19) * 8
+            FLY(1) = 0
+            FLY(2) = 1
+
+            TRACK 4, 2
+        END IF
+
+        EXIT SUB
+    END IF
+
+    'MOVE DOWN THE FLY
+    ADD FLY(1), FLY(3)
+
+    'RANDOMLY PUSH A MUSHROOM
+    IF RND(1000) < 50 THEN
+        'NOT ABOVE A CENTIPEDE ITEM
+        IF SPRITE HIT(15, 2 TO 14) = 0 THEN
+            'NOT ON THE LAST LINE
+            IF FLY(1) < 13 * 8 THEN
+                PAL 0
+                CELL FLY(0) / 8, FLY(1) / 8, 2
+            END IF
+        END IF
+    END IF
+
+    'SCREEN BOTTOM REACHED?
+    IF FLY(1) >= 14 * 8 THEN
+        FLY(2) = 0
+        STOP 2
+    END IF
+END SUB
+
+'--------------------------------------------
+'MOVE THE SPIDER
+'SPIDER - SPIDER ARRAY
+'--------------------------------------------
+SUB MOVE_SPIDER(SPIDER())
+    'IS SPIDER EXPLODING?
+    IF SPIDER(2) = 2 THEN EXIT SUB
+
+    'NO SPIDER VISIBLE?
+    IF SPIDER(2) = 0 THEN
+        'GENERATE ONE RANDOMLY
+        IF (RND(1000) MOD 425) = 0 THEN
+            'DETERMINE INITIAL SPIDER DIRECTION
+            SPIDER(9) = RND(1000) MOD 2
+
+            'INITIAL SPIDER X POSITION AND OFFSET
+            IF SPIDER(9) = 0 THEN
+                SPIDER(0) =  160
+                SPIDER(5) = -1
+            ELSE
+                SPIDER(0) = -16
+                SPIDER(5) =  1
+            END IF
+
+            'INITIAL Y POSITION, SET SPIDER VISIBLE AND RESET COUNTS
+            SPIDER(1) = 60 + RND(40)
+            SPIDER(2) = 1
+            SPIDER(7) = 0
+            SPIDER(8) = 0
+
+            'INITIAL Y OFFSET
+            IF (RND(1000) MOD 2)=0 THEN SPIDER(6)=-1 ELSE SPIDER(6)=1
+
+            'PLAY SPIDER TRACK
+            TRACK 5, 1
+        END IF
+
+        EXIT SUB
+    END IF
+
+    'INCREMENT TRACK TIMER
+    INC SPIDER(7)
+
+    'LOOP THE SPIDER SOUND
+    IF SPIDER(7) = 50 THEN
+        SPIDER(7) = 0
+        TRACK 5, 1
+    END IF
+
+    'MOVE THE SPIDER
+    ADD SPIDER(0), (SPIDER(3) * SPIDER(5))
+    ADD SPIDER(1), (SPIDER(3) * SPIDER(6))
+
+    'IS SPIDER OUT OF SCREEN?
+    IF SPIDER(0) < -16 OR SPIDER(0) > 160 THEN
+        'HIDE THE SPIDER
+        SPIDER(2) = 0
+
+        'STOP THE SPIDER SOUND
+        STOP 1
+
+        EXIT SUB
+    END IF
+
+    'DO CHANGE SPIDER DIRECTION?
+    IF SPIDER(1) <= 56 OR SPIDER(1) >= 110 THEN
+        'SELECT A NEW X OFFSET
+        IF SPIDER(9) = 0 THEN
+            SPIDER(5) = (RND(1000) MOD 2) - 1
+        ELSE
+            SPIDER(5) = (RND(1000) MOD 2)
+        END IF
+
+        'SELECT A NEW Y OFFSET AND RESET THE CHANGE DIR TIMER
+        SPIDER(6) = -SPIDER(6)
+        SPIDER(8) = 0
+    ELSE IF SPIDER(8) = 40 THEN
+        'SELECT A NEW X OFFSET
+        IF SPIDER(9) = 0 THEN
+            SPIDER(5) = (RND(1000) MOD 2) - 1
+        ELSE
+            SPIDER(5) = (RND(1000) MOD 2)
+        END IF
+
+        'SELECT A NEW Y OFFSET
+        IF (RND(1000) MOD 2) = 0 THEN SPIDER(6) = -1 ELSE SPIDER(6) = 1
+
+        'RESET THE CHANGE DIR TIMER
+        SPIDER(8) = 0
+    END IF
+
+    'INCREMENT THE CHANGE DIR TIMER
+    INC SPIDER(8)
+
+    COL = 0
+
+    'DETECT COLLISION AGAINST THE BACKGROUND (SEGMENT 1)
+    CALL COLLIDE(SPIDER(0), SPIDER(1) + 4, COL)
+
+    'FOUND COLLISION?
+    IF COL THEN
+        'REMOVE THE MUSHROOM
+        CELL SPIDER(0) \ 8, (SPIDER(1) + 4) \ 8, 0
+    END IF
+
+    'DETECT COLLISION AGAINST THE BACKGROUND (SEGMENT 2)
+    CALL COLLIDE(SPIDER(0) + 8, SPIDER(1) + 4, COL)
+
+    'FOUND COLLISION?
+    IF COL THEN
+        'REMOVE THE MUSHROOM
+        CELL (SPIDER(0) + 8) \ 8, (SPIDER(1) + 4) \ 8, 0
+    END IF
+
+    'DETECT COLLISION AGAINST THE BACKGROUND (SEGMENT 3)
+    CALL COLLIDE(SPIDER(0) + 16, SPIDER(1) + 4, COL)
+
+    'FOUND COLLISION?
+    IF COL THEN
+        'REMOVE THE MUSHROOM
+        CELL (SPIDER(0) + 16) \ 8, (SPIDER(1) + 4) \ 8, 0
+    END IF
+END SUB
+
+'--------------------------------------------
+'MOVE THE SCORPION
+'SCORPION - SCORPION ARRAY
+'--------------------------------------------
+SUB MOVE_SCORPION(SCORPION())
+    'IS SCORPION EXPLODING?
+    IF SCORPION(2) = 2 THEN EXIT SUB
+
+    'NO SCORPION VISIBLE?
+    IF SCORPION(2) = 0 THEN
+        'GENERATE ONE RANDOMLY
+        IF RND(1000) = 121 THEN
+            'INITIAL Y POSITION AND SET SCORPION VISIBLE
+            SCORPION(1) = RND(7) * 8
+            SCORPION(2) = 1
+            SCORPION(5) = 0
+
+            'INITIAL X POSITION AND Y OFFSET
+            IF (RND(1000) MOD 2) = 0 THEN
+                SCORPION(0) =  160
+                SCORPION(3) = -1
+            ELSE
+                SCORPION(0) = -16
+                SCORPION(3) =  1
+            END IF
+
+            TRACK 6, 1
+        END IF
+
+        EXIT SUB
+    END IF
+
+    'INCREMENT TRACK TIMER
+    INC SCORPION(5)
+
+    'LOOP THE SCORPION SOUND
+    IF SCORPION(5) = 20 THEN
+        SCORPION(5) = 0
+        TRACK 6, 1
+    END IF
+
+    'MOVE THE SCORPION LEFT OR RIGHT
+    ADD SCORPION(0), SCORPION(3)
+
+    'IS SCORPION OUT OF SCREEN?
+    IF SCORPION(0) < -16 OR SCORPION(0) > 160 THEN
+        'HIDE THE SCORPION
+        SCORPION(2) = 0
+
+        'STOP THE SCORPION SOUND
+        STOP 1
+
+        EXIT SUB
+    END IF
+
+    X   = SCORPION(0)
+    Y   = SCORPION(1)
+    COL = 0
+
+    'DETECT COLLISION AGAINST THE BACKGROUND (SEGMENT 1)
+    CALL COLLIDE(X, Y + 4, COL)
+
+    'FOUND COLLISION?
+    IF COL THEN
+        'POISON THE MUSHROOM
+        PAL 3
+        CELL X \ 8, (Y + 4) \ 8, CELL.C(X \ 8, (Y + 4) \ 8)
+    END IF
+
+    'DETECT COLLISION AGAINST THE BACKGROUND (SEGMENT 2)
+    CALL COLLIDE(X + 8, Y + 4, COL)
+
+    'FOUND COLLISION?
+    IF COL THEN
+        'POISON THE MUSHROOM
+        PAL 3
+        CELL (X + 8) \ 8, (Y + 4) \ 8, CELL.C((X + 8) \ 8, (Y + 4) \ 8)
+    END IF
+
+    'DETECT COLLISION AGAINST THE BACKGROUND (SEGMENT 3)
+    CALL COLLIDE(X + 16, Y + 4, COL)
+
+    'FOUND COLLISION?
+    IF COL THEN
+        'POISON THE MUSHROOM
+        PAL 3
+        CELL (X+16) \ 8, (Y+4) \ 8, CELL.C((X+16) \ 8, (Y+4) \ 8)
+    END IF
+END SUB
+
+'--------------------------------------------
+'PROCESS THE SPRITE ANIMATIONS
+'FRAME[IN, OUT] - CURRENT FRAME
+'ANIMLENGTH - ANIMATION LENGTH
+'FRAMELENGTH - FRAME LENGTH
+'--------------------------------------------
+SUB ANIM_SPRITES(FRAME, ANIMLENGTH, FRAMELENGTH)
+    'MOVE TO NEXT FRAME
+    FRAME = (FRAME + 1) MOD ANIMLENGTH
+
+    'CALCULATE THE FRAME INDEX
+    INDEX = (FRAME \ FRAMELENGTH)
+
+    CENTIDX = INDEX
+
+    'CENTIPEDE ANIM IS A SPECIAL LOOP, WHICH REVERTS ON THE END
+    IF CENTIDX = 3 THEN CENTIDX = 1
+    
+    'COPY THE CURRENT FRAMES
+    CALL COPY_ANIM(CENTIDX, 26, 5,  1, 1)
+    CALL COPY_ANIM(CENTIDX, 29, 21, 1, 1)
+    CALL COPY_ANIM(CENTIDX, 32, 37, 1, 1)
+    CALL COPY_ANIM(CENTIDX, 35, 53, 1, 1)
+    CALL COPY_ANIM(CENTIDX, 38, 6,  1, 1)
+    CALL COPY_ANIM(CENTIDX, 41, 22, 1, 1)
+    CALL COPY_ANIM(CENTIDX, 44, 38, 1, 1)
+    CALL COPY_ANIM(CENTIDX, 47, 54, 1, 1)
+    
+    'ANIMATE THE FLY
+    CALL COPY_ANIM(INDEX MOD 2, 24, 7, 1, 1)
+
+    'ANIMATE THE SPIDER
+    CALL COPY_ANIM(INDEX, 0, 10, 2, 1)
+
+    'ANIMATE THE SCORPION
+    CALL COPY_ANIM(INDEX, 8, 8, 2, 1)
+
+    'ANIMATE THE GRASSHOPER
+    CALL COPY_ANIM(INDEX, 16, 12, 2, 1)
+END SUB
+
+'--------------------------------------------
+'DRAW THE GAME BACKGROUND
+'--------------------------------------------
+SUB DRAW_BG
+    CLS
+
+    PAL 0
+
+    BG 1
+    BG SOURCE ROM(4)
+    BG COPY 0, 0, 20, 16 TO 0, 0
+
+    BG 0
+
+    FOR I = 0 TO 20
+        CELL RND(20), RND(10) + 1, 2
+    NEXT I
+END SUB
+
+'--------------------------------------------
+'REPAIR THE GAME BACKGROUND AFTER A LIVE WAS LOST
+'--------------------------------------------
+SUB REPAIR_BG
+    PAL 0
+    BG 0
+
+    'ITERATE THROUGH EACH BACKGROUND CELLS
+    FOR Y = 0 TO 12
+        FOR X = 0 TO 20
+            'GET CELL CONTENT
+            C = CELL.C(X, Y)
+
+            'IS MUSHROOM BROKEN?
+            IF C <> 0 AND C <> 2 THEN
+                'REPAIR IT
+                CELL X, Y, 2
+                TRACK 3, 0
+                WAIT 10
+                WAIT VBL
+            END IF
+
+            'GET CELL PALETTE ATTRIBUTE
+            A = CELL.A(X, Y) AND 7
+
+            'IS MUSHROOM POISONED?
+            IF A = 3 AND C <> 0 THEN
+                'REPAIR IT
+                CELL X, Y, 2
+                TRACK 3, 0
+                WAIT 10
+                WAIT VBL
+            END IF
+        NEXT X
+    NEXT Y
+END SUB
+
+'--------------------------------------------
+'DRAW THE CENTIPEDE
+'CENTIPEDE - CENTIPEDE ARRAY
+'--------------------------------------------
+SUB DRAW_CENTIPEDE(CENTIPEDE())
+    FOR I = 0 TO UBOUND(CENTIPEDE) - 1
+        CALL DRAW_CENTIPEDE_ITEM(I, CENTIPEDE())
+    NEXT I
+END SUB
+
+'--------------------------------------------
+'DRAW A CENTIPEDE ITEM
+'IDX - ITEM INDEX
+'CENTIPEDE - CENTIPEDE ARRAY
+'--------------------------------------------
+SUB DRAW_CENTIPEDE_ITEM(IDX, CENTIPEDE())
+    'IS CENTIPEDE ITEM HIDDEN?
+    IF CENTIPEDE(IDX, 4) = 0 THEN
+        SPRITE OFF IDX + 2
+        EXIT SUB
+    END IF
+
+    SPRITE IDX + 2 PAL 1
+
+    IF CENTIPEDE(IDX, 2) < 0 THEN
+        SPRITE IDX + 2 FLIP 1, 0
+    ELSE
+        SPRITE IDX + 2 FLIP 0, 0
+    END IF
+
+    SPRITE IDX + 2, CENTIPEDE(IDX,0),CENTIPEDE(IDX,1),CENTIPEDE(IDX,4)
+END SUB
+
+'--------------------------------------------
+'DRAW THE FLY
+'FLY - FLY ARRAY
+'--------------------------------------------
+SUB DRAW_FLY(FLY())
+    'IS FLY EXPLODING?
+    IF FLY(2) = 2 THEN
+        'ANIMATE AND SHOW EXPLOSION
+        CALL COPY_ANIM(FLY(4) \ 5, 50, 7, 1, 1)
+        SPRITE 15 PAL 2
+        SPRITE 15, FLY(0), FLY(1), 7
+        INC FLY(4)
+
+        'EXPLOSION END REACHED?
+        IF FLY(4) >= 30 THEN
+            FLY(2) = 0
+            FLY(4) = 0
+            SPRITE OFF 15
+        END IF
+
+        EXIT SUB
+    END IF
+
+    'IS FLY NOT VISIBLE?
+    IF FLY(2) = 0 THEN
+        SPRITE OFF 15
+        EXIT SUB
+    END IF
+
+    'DRAW THE FLY
+    SPRITE 15 PAL 0
+    SPRITE 15, FLY(0), FLY(1), 7
+END SUB
+
+'--------------------------------------------
+'DRAW THE SPIDER
+'SPIDER - SPIDER ARRAY
+'--------------------------------------------
+SUB DRAW_SPIDER(SPIDER())
+    'IS SPIDER EXPLODING?
+    IF SPIDER(2) = 2 THEN
+        SPRITE 16 PAL 0
+        SPRITE 17 PAL 0
+
+        'SHOW HIT SCORE
+        IF SPIDER(10) = 3 THEN
+            SPRITE 16, SPIDER(0),     SPIDER(1), 46
+            SPRITE 17, SPIDER(0) + 8, SPIDER(1), 47
+        ELSE IF SPIDER(10) = 2 THEN
+            SPRITE 16, SPIDER(0),     SPIDER(1), 30
+            SPRITE 17, SPIDER(0) + 8, SPIDER(1), 31
+        ELSE
+            SPRITE 16, SPIDER(0),     SPIDER(1), 14
+            SPRITE 17, SPIDER(0) + 8, SPIDER(1), 15
+        END IF
+
+        INC SPIDER(6)
+
+        'EXPLOSION END REACHED?
+        IF SPIDER(6) >= 40 THEN
+            SPIDER(2) = 0
+            SPIDER(6) = 0
+            SPRITE OFF 16 TO 17
+        END IF
+
+        EXIT SUB
+    END IF
+
+    'IS SPIDER NOT VISIBLE?
+    IF SPIDER(2) = 0 THEN
+        SPRITE OFF 16 TO 17
+        EXIT SUB
+    END IF
+
+    'DRAW THE SPIDER
+    SPRITE 16 PAL 0
+    SPRITE 16, SPIDER(0), SPIDER(1), 10
+    SPRITE 17 PAL 0
+    SPRITE 17, SPIDER(0) + 8, SPIDER(1), 11
+END SUB
+
+'--------------------------------------------
+'DRAW THE SCORPION
+'SCORPION - SCORPION ARRAY
+'--------------------------------------------
+SUB DRAW_SCORPION(SCORPION())
+    'IS SCORPION EXPLODING?
+    IF SCORPION(2) = 2 THEN
+        'ANIMATE AND SHOW EXPLOSION
+        CALL COPY_ANIM(SCORPION(4) \ 5, 50, 7, 1, 1)
+        SPRITE 18 PAL 2
+        SPRITE 18, SCORPION(0) + 4, SCORPION(1), 7
+        SPRITE OFF 19
+        INC SCORPION(4)
+
+        'EXPLOSION END REACHED?
+        IF SCORPION(4) >= 30 THEN
+            SCORPION(2) = 0
+            SCORPION(4) = 0
+            SPRITE OFF 18
+        END IF
+
+        EXIT SUB
+    END IF
+
+    'IS SCORPION NOT VISIBLE?
+    IF SCORPION(2) = 0 THEN
+        SPRITE OFF 18 TO 19
+        EXIT SUB
+    END IF
+
+    'DRAW THE SCORPION
+    IF SCORPION(3) < 0 THEN
+        SPRITE 18 PAL 0 FLIP 0, 0
+        SPRITE 19 PAL 0 FLIP 0, 0
+
+        SPRITE 18, SCORPION(0),     SCORPION(1), 8
+        SPRITE 19, SCORPION(0) + 8, SCORPION(1), 9
+    ELSE
+        SPRITE 18 PAL 0 FLIP 1, 0
+        SPRITE 19 PAL 0 FLIP 1, 0
+
+        SPRITE 18, SCORPION(0),     SCORPION(1), 9
+        SPRITE 19, SCORPION(0) + 8, SCORPION(1), 8
+    END IF
+END SUB
+
+'--------------------------------------------
+'DRAW THE PLAYER SPRITE
+'X - SPRITE X POSITION IN PIXELS
+'Y - SPRITE Y POSITION IN PIXELS
+'--------------------------------------------
+SUB DRAW_PLAYER(X, Y)
+    SPRITE 0 PAL 1
+    SPRITE 0, X, Y, 3
+END SUB
+
+'--------------------------------------------
+'DRAW THE LASER SPRITE
+'X - LASER X POSITION
+'Y - LASER Y POSITION
+'VISIBLE - IF 1, LASER IS VISIBLE
+'--------------------------------------------
+SUB DRAW_LASER(X, Y, VISIBLE)
+    'IS LASER NOT VISIBLE?
+    IF VISIBLE = 0 THEN
+        SPRITE OFF 1
+        EXIT SUB
+    END IF
+
+    'DRAW THE LASER
+    SPRITE 1 PAL 1
+    SPRITE 1, X, Y, 4
+END SUB
+
+'--------------------------------------------
+'DRAW THE MAIN INTERFACE
+'SCORE - SCORE
+'HIGH_SCORE - HIGH SCORE
+'LIVES - LIVES COUNT
+'--------------------------------------------
+SUB DRAW_INTERFACE(SCORE, HIGH_SCORE, LIVES)
+    PAL 0
+    NUMBER 0,  15, SCORE,      5
+    NUMBER 15, 15, HIGH_SCORE, 5
+
+    PAL 1
+    IF LIVES > 3 THEN
+        CELL 11, 15, 35
+    ELSE IF LIVES > 2 THEN
+        CELL 11, 15, 3
+    ELSE
+        CELL 11, 15, 0
+    END IF
+    
+    IF LIVES > 1 THEN
+        CELL 10, 15, 3
+    ELSE
+        CELL 10, 15, 0
+    END IF
+
+    IF LIVES > 0 THEN
+        CELL 9, 15, 3
+    ELSE
+        CELL 9, 15, 0
+    END IF
+END SUB
+
+'--------------------------------------------
+'CHANGE THE GAME COLORS
+'INDEX - COLORS INDEX
+'--------------------------------------------
+SUB CHANGE_COLORS(INDEX)
+    IF INDEX >= 8 THEN
+        RESTORE IN_GAME_COLORS
+        INDEX = 0
+    END IF
+
+    'READ PALETTE 0
+    READ R, G, B
+    C1 = R * 16 + G * 4 + B
+    READ R, G, B
+    C2 = R * 16 + G * 4 + B
+    READ R, G, B
+    C3 = R * 16 + G * 4 + B
+    PALETTE 0, , C1, C2, C3
+
+    'READ PALETTE 1
+    READ R, G, B
+    C1 = R * 16 + G * 4 + B
+    READ R, G, B
+    C2 = R * 16 + G * 4 + B
+    READ R, G, B
+    C3 = R * 16 + G * 4 + B
+    PALETTE 1, , C1, C2, C3
+
+    'READ PALETTE 3
+    READ R, G, B
+    C1 = R * 16 + G * 4 + B
+    READ R, G, B
+    C2 = R * 16 + G * 4 + B
+    PALETTE 3, , C1, C2,
+
+    INC INDEX
+END SUB
+
+'--------------------------------------------
+'CHECK IF A COLLISION HAPPENED AGAINST THE BACKGROUND
+'X - X POSITION TO CHECK, IN PIXELS
+'Y - Y POSITION TO CHECK, IN PIXELS
+'OUT - IF 1, A COLLISION HAPPENED
+'--------------------------------------------
+SUB COLLIDE(X, Y, OUT)
+    OUT = CELL.C(X \ 8, Y \ 8) <> 0
+END SUB
+
+'--------------------------------------------
+'COPY CHARACTERS FROM ANIM PATTERNS MEMORY (ROM 3) TO CHAR MEMORY
+'FRAME - THE ANIMATION FRAME
+'SRC - SOURCE CHARACTER TO COPY FROM
+'DST - DESTINATION CHARACTER TO COPY TO
+'SW - CHARACTER WIDTH TO COPY
+'SH - CHARACTER HEIGHT TO COPY
+'--------------------------------------------
+SUB COPY_ANIM(FRAME, SRC, DST, SW, SH)
+    FOR I = 0 TO SH - 1
+        SI = SRC + (I * 16)
+        DI = DST + (I * 16)
+        COPY ROM(3)+16*(SI+(FRAME*SW)), 16*SW TO $8000+(16*DI)
+    NEXT I
+END SUB
+
+'--------------------------------------------
+'RASTER FUNCTION THAT MOVES THE CENTIPEDE IN THE TITLE SCREEN
+'--------------------------------------------
+SUB MOVE_CENTIPEDE_TITLE
+    SCROLL 1, (10*COS(((TITLE_OFFSET+((RASTER\8)*10))*6.28)/360))-4, 0
+END SUB
+
+'--------------------------------------------
+IN_GAME_COLORS:
+DATA 0,0,3, 0,2,3, 2,2,3, 1,3,1, 3,0,0, 3,3,2, 3,2,3, 3,3,0
+DATA 3,0,0, 2,3,1, 3,3,3, 0,3,0, 3,0,0, 3,3,2, 0,1,3, 3,1,0
+DATA 3,1,3, 0,3,3, 3,3,0, 3,0,3, 0,3,3, 3,3,0, 0,2,3, 2,3,1
+DATA 3,0,0, 3,3,0, 0,3,3, 3,0,0, 3,3,0, 0,3,3, 1,3,2, 1,2,2
+DATA 0,0,3, 3,3,0, 2,3,2, 3,3,0, 0,0,2, 2,3,2, 3,1,1, 0,2,3
+DATA 3,0,3, 0,3,3, 3,3,0, 0,3,3, 3,0,3, 3,3,0, 1,1,2, 1,2,0
+DATA 0,3,3, 3,3,0, 0,0,3, 0,3,3, 3,3,0, 0,0,3, 3,1,0, 3,2,1
+DATA 3,0,3, 3,3,0, 1,3,1, 3,3,0, 3,0,3, 1,3,1, 0,2,1, 1,3,2
+'--------------------------------------------
+
+#1:PALETTES
+00030B2B001D303E003C38300035391B
+001E1735003B3D0C003F2A15003F2A15
+
+#2:GAME SPRITES
+00000000000000000000000000000000
+00000000000000000000000000FFFF00
+3C4281FF24242418003C7E0018181800
+10381092FE7C383810387CFEFE7C3838
+00000000000000000010101010101000
+081C7EFFFF7E1C080800000000000008
+041878FFFF7818040404060000060404
+183C7EFEFE060000181C1EFEFE5654A2
+006064242E1F0F0700606E3F2E1F0F07
+00CED1918903FEFC00CED1918903FEFC
+0031CB030F3CC2000030CC0C0033C100
+008CD3C0F07C4300000C3330008C8300
+011F1F7F3F4141800122622023414180
+00F8FCFCF80808CF00804020100808CF
+003B0A3A0A3B0000003B0A3A0A3B0000
+00B8A8A8A8B8000000B8A8A8A8B80000
+00000000000000000000000000000000
+00000000000000000000000000000000
+3C4281FF24200000003C7E0018080000
+1028545A555A2C1010386C666B6E3C10
+00000000000000000000000000000000
+00747E7F3F7F3E1C0004000000400000
+00747E7D3C7F26140004000203401808
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+003B223A2A3B0000003B223A2A3B0000
+00B8A8A8A8B8000000B8A8A8A8B80000
+00000000000000000000000000000000
+00000000000000000000000000000000
+3C4281AA00000000003C6E0000000000
+02072220F8F8702000002070F8F87020
+00000000000000000000000000000000
+183C3C7EFF7E3C180000000081000000
+183C3C7E7E9918180000000000E72400
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+003B2A3A0A3B0000003B2A3A0A3B0000
+00B8A8A8A8B8000000B8A8A8A8B80000
+00000000000000000000000000000000
+00000000000000000000000000000000
+3C42000000000000003C180000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+002E7EFEFCFE7C380020000000020000
+002E7EBE3CFE642800200040C0021810
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+81997EDBFF7E7E3C81997EDBFF7E7E3C
+3C624ECFCF4E623C0000000000000000
+00000000000000003C424EC3C34E423C
+3C5A4AC3C3525A3C3C5A4AC3C3525A3C
+3C4266E7E766663C0000000000000000
+00000000000000003C4266E7E766423C
+3C464ACBC74E4E3C3C464ACBC74E4E3C
+3C424EC3C34E423C0000000000000000
+00000000000000003C464ACBCB4A463C
+3C424EC3C34E423C3C424EC3C34E423C
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+33333333333333330000000000000000
+CCCCCCCCCCCCCCCC0000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+33333333337373E30000000000000000
+CCCCCCCCCCCECEC70000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+000103071FFEFCE00000000000000000
+E3C3C383030303030000000000000000
+C7C3C3C1C0C0C0C00000000000000000
+0080C0E0F87F3F070000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+000C12121E121212000C12121E121212
+00F922222322222200F9222223222222
+008E4949CE494949008E4949CE494949
+007C10101010107C007C10101010107C
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+1C3060606060301C0000000000000000
+380C060606060C380000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+182C6666666634180000000000000000
+183818181818187E0000000000000000
+3C42020E3C70607E0000000000000000
+7E0C183C0606663C0000000000000000
+0C1C3C6C4C7E0C0C0000000000000000
+7E607C060606663C0000000000000000
+1E30607C6666663C0000000000000000
+7E66060C183030300000000000000000
+3C62723C3C46423C0000000000000000
+3C6666663E060C780000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+183C6666667E66660000000000000000
+7C66667C6666667C0000000000000000
+1C3662606062361C0000000000000000
+786C666666666C780000000000000000
+7E60607C6060607E0000000000000000
+7E60607C606060600000000000000000
+1C3660606E66361C0000000000000000
+6666667E666666660000000000000000
+7E1818181818187E0000000000000000
+060606060606663C0000000000000000
+62666C78786C66620000000000000000
+606060606060607E0000000000000000
+42667E7E666666660000000000000000
+4666767E7E6E66620000000000000000
+3C6666666666663C0000000000000000
+7C666666667C60600000000000000000
+3C6666666A6C663A0000000000000000
+7C6666666C786C660000000000000000
+183C62603C06663C0000000000000000
+7E181818181818180000000000000000
+6666666666667E3C0000000000000000
+6666666666663C180000000000000000
+666666667E7E66420000000000000000
+66663C18183C66660000000000000000
+6666663C181818180000000000000000
+3E66060C1830667C0000000000000000
+
+#3:ANIMATIONS
+0031CB030F3CC2000030CC0C0033C100
+008CD3C0F07C4300000C3330008C8300
+C0310B03CF3C0200C0300C0CC0330100
+038CD0C0F33C4000030C303003CC8000
+20518B032F5E820020508C0C20518100
+048AD1C0F43A4100040A313004CA8100
+10312B431F2E224010302C4C10212140
+088CD4C2F8744402080C343208848402
+006064242E1F0F0700606E3F2E1F0F07
+00CED1918903FEFC00CED1918903FEFC
+006044642E1F0F0700604E7F2E1F0F07
+00C046898103FEFC00C046898103FEFC
+008088C95D3E1F0F00809CFF5D3E1F0F
+00808C921008F8F000808C921008F8F0
+00C188885D3E1F0F00C19CBE5D3E1F0F
+008C92911109FAF0008C92911109FAF0
+011F1F7F3F4141800122622023414180
+00F8FCFCF80808CF00804020100808CF
+01011F1F7F3F41800101226220234180
+0000F8FCFCF8088F000080402010088F
+0001011F1F7F3FC000010122622023C0
+804040F8FCFCF8878040402010088887
+00011F1F7F3F40800001226220234080
+8040F8FCFCF848278040402010C84827
+183C7EFEFE060000181C1EFEFE5654A2
+183C7EFEFE060000181C1EFEFE364A24
+041C7EFFFF7E1C040400000000000004
+081C7EFFFF7E1C080800000000000008
+101C7EFFFF7E1C101000000000000010
+00727E7F3F3F7E1C0002000000004000
+00747E7F3F7F3E1C0004000000400000
+00787E7F7F3F3E1C0008000040000000
+183C3C7E7EFF3C180000000000810000
+183C3C7EFF7E3C180000000081000000
+183C3CFF7E7E3C180000008100000000
+004E7EFEFCFC7E380040000000000200
+002E7EFEFCFE7C380020000000020000
+001E7EFEFEFC7C380010000002000000
+041878FFFF7818040404060000060404
+081878FFFF7818080804060000060408
+101878FFFF7818101004060000060410
+00727E7D3C3F66140002000203005808
+00747E7D3C7F26140004000203401808
+00787E7D7C3F26140008000243001808
+183C3C7E7E9918180000000000E72400
+183C3C7EFF1818180000000081662400
+183C3CFF7E1818180000008100662400
+004E7EBE3CFC662800400040C0001A10
+002E7EBE3CFE642800200040C0021810
+001E7EBE3EFC642800100040C2001810
+1008345A562C100010182C666A3C1000
+0C324DBD522C10000C3E73C36E3C1000
+1C2259FDB25A24181C3E6783CE663C18
+2856418241523408287E7FFE7F7E3C08
+4CFA63C2C3663C184CFA63C2C3663C18
+3844428181423A043844428181423A04
+
+#4:BACKGROUND
+00001410000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000010001000100010001000100
+01000100010001000100010001000100
+01000100010001000100010000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000
+
+#5:TITLE BG
+00001410000000000200000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000002000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000002000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+02000000000000000200000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+02000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+02000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000200000000000000020000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000020000000000000000000000
+00000000000000000000000000000000
+000002008C038D038E038F038F030000
+00000000020000000000000000000000
+0000000000000000000000009C039D03
+9E039F039F0300000000000000000000
+00000000000002000000000000000000
+00000000AC03AD03AE03AF0300000000
+00000000000000000000000000000000
+000000000000000000000000BC03BD03
+BE03BF03000000000000000000000000
+02000000
+
+#6:TITLE FG
+00001410000000000000000000000000
+00000000000080230000000000000000
+00000000000000000000000000000000
+00000000000000000000000000008123
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000082230000000000000000
+00000000000000000000000000000000
+00000000000000000000000000008323
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000084240000000000000000
+00000000000000000000000000000000
+00000000000000000000000000008524
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000086240000000000000000
+00000000000000000000000000000000
+00000000000000000000000000008725
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000088250000000000000000
+00000000000000000000000000000000
+00000000000000000000000000008925
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+000000008C03000000008F038F030000
+00000000000000000000000000000000
+00000000000000000000000000000000
+000000009F0300000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000
+
+#15:MAIN SOUND
+3F00808019000F000F00F02F0CFFF000
+2F0080600CA76A00380030301AFE0000
+2800202F09F30000140050981B40F900
+2F00F04F1F06CA000F0080001F0F0000
+0800000F000000000800000F00000000
+0800000F000000000800000F00000000
+0800000F000000000800000F00000000
+0800000F000000000800000F00000000
+0040404081C040400240404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+40404040404040404040404040404040
+382A00FF000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+1F1800FF00001F1800FF00001F1800FF
+00001F1800FF00001F1800FF00001F18
+00FF00001F1800FF00001F1800FF0000
+1F1800FF00001F1800FF00001F1800FF
+00001F1800FF00001F1800FF00001F18
+00FF00001F1800FF00001F1800FF0000
+2C0F0000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000FF0000
+2C3F00FF000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+24480000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+0000000000000000000000FF00000000
+00000000000000000000000000000000
+285FE62B5F00345F00000000345F002F
+5F002B5F000000F0FF00000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+2B68E62668002E68002668F0FF6F0000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+277F002A7F002F7F00337F000000002F
+7F00337F00000000000000337F00367F
+003B7F003F7F000000003B7F003F7F00
+000000000000000000FF000000000000
+00000000000000000000000000000000
+00000000000000000000000000000000
+
